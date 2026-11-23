@@ -236,9 +236,17 @@ function applyTheme(){
   try{localStorage.setItem('ah_theme',JSON.stringify(TH))}catch(e){}
 }
 /* ================= 画面とタッチ座標 ================= */
+/* 表示サイズの測定。iOSのホーム画面起動では、縦向きで起動すると高さがステータスバー分だけ短く報告されたままになる
+   （回転すると直る）既知の不具合があるので、画面いっぱいに出ているときは端末の画面サイズを使う */
+function measure(){
+  let w=innerWidth,h=innerHeight;const vv=window.visualViewport;if(vv){w=Math.max(w,Math.round(vv.width));h=Math.max(h,Math.round(vv.height))}
+  if(navigator.standalone===true&&screen.width&&screen.height){const a=Math.max(screen.width,screen.height),b=Math.min(screen.width,screen.height),land=w>h,fw=land?a:b,fh=land?b:a;
+    if(Math.abs(w-fw)<=2&&h<fh)h=fh} // 横幅が画面いっぱい＝全画面表示（iPadの分割表示などは除外）→ 高さも画面いっぱい
+  return [w,h];
+}
 function resize(){
   dpr=Math.min(devicePixelRatio||1,2);
-  const rc=ui.getBoundingClientRect();W=Math.round(rc.width)||innerWidth;H=Math.round(rc.height)||innerHeight;VX=rc.left;VY=rc.top;
+  [W,H]=measure();for(const c of [ui,glc]){c.style.width=W+'px';c.style.height=H+'px'}const rc=ui.getBoundingClientRect();VX=rc.left;VY=rc.top;
   ui.width=W*dpr;ui.height=H*dpr;rot=W>H;
   // safe-area（ホームインジケータ・ノッチ）分だけ内側に収める。3Dカメラと合わせるため左右・上下は対称に取る
   let ix=0,iy=0;try{const c=getComputedStyle(document.getElementById('sa'));ix=Math.max(parseFloat(c.paddingLeft)||0,parseFloat(c.paddingRight)||0);iy=Math.max(parseFloat(c.paddingTop)||0,parseFloat(c.paddingBottom)||0)}catch(e){}
@@ -722,14 +730,16 @@ function drawPauseBtn(p){ // ‖ アイコン（文字なし）
    CPU戦＝1Pのみ／オンライン＝ホスト端末は1P、ゲストから届いた入力（rctx）は2P／同じ端末の2P＝両方 */
 const ctl=i=>mode==='cpu'?i===0:mode==='online'?(rctx?i===1:i===0):true;
 function down(e){
-  e.preventDefault();unlock();
+  e.preventDefault();unlock();diagP={cx:e.clientX,cy:e.clientY};
   const {x,y}=toL(e.clientX,e.clientY);
   if(e.pointerType==='mouse'&&fsHit(x,y)){goFS();return}
   if(guestOn()){guestDown(e.pointerId,x,y);return}
   if(state==='lobby'){lobbyTap(local(0,x,y));return}
   noFwd=true;try{pdown(e.pointerId,x,y)}finally{noFwd=false}
 }
+let DIAG=false,diagT=0,diagP=null; // 隠し診断表示：タイトルの AIR HOCKEY を長押し
 function pdown(id,x,y){
+  if(state==='title'&&!rctx){const l=local(0,x,y);if(Math.abs(l.u-FW/2)<180&&Math.abs(l.v-(TY0+58))<34)diagT=performance.now()}
   if(rctx&&state!=='play'&&state!=='goal'&&state!=='over')return;
   if(state==='title'){const l=local(0,x,y);if(fsHit(x,y))return;for(const b of BTN){const by=btnY(b);if(l.u>b.x&&l.u<b.x+b.w&&l.v>by&&l.v<by+BH){if(b.m==='opt'){state='options';beep(660,.05)}else if(b.m==='net'){if(window.Peer){state='lobby';LOB.sub='menu';beep(660,.05)}else{beep(150,.12)}}else start(b.m,b.l);return}}return}
   if(state==='options'){optTap(local(0,x,y),id);return}
@@ -766,6 +776,7 @@ function up(e){
   noFwd=true;try{pup(e.pointerId,x,y,e.type)}finally{noFwd=false}
 }
 function pup(id,x,y,type){
+  if(diagT&&state==='title'){const held=performance.now()-diagT;diagT=0;if(held>1200){DIAG=!DIAG;beep(DIAG?1320:440,.08);return}}
   if(id===spdPtr){spdPtr=null;return}
   const d=drags.get(id);
   if(d){drags.delete(id);d.x=x;d.y=y;
@@ -775,8 +786,9 @@ function pup(id,x,y,type){
     return}
   for(const p of P)if(p.ptr===id)p.ptr=null;
 }
-ui.addEventListener('pointerdown',down);ui.addEventListener('pointermove',move);
-ui.addEventListener('pointerup',up);ui.addEventListener('pointercancel',up);
+// キャンバスの外（iOSで表示範囲が短く報告された帯など）に触れても受け付けるよう、画面全体で受ける
+addEventListener('pointerdown',down,{passive:false});addEventListener('pointermove',move,{passive:false});
+addEventListener('pointerup',up);addEventListener('pointercancel',up);
 document.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
 document.addEventListener('gesturestart',e=>e.preventDefault());
 
@@ -1246,6 +1258,15 @@ function drawOptions(){
   });
   frame(1,()=>{pbox(36,TY0+110,FW-72,120,COL[1]);ptext('AIR HOCKEY',FW/2,TY0+172,34,YEL)});
 }
+function drawDiag(){
+  g.setTransform(dpr,0,0,dpr,0,0);g.font='12px monospace';g.textAlign='left';g.textBaseline='top';
+  const vv=window.visualViewport,sa=getComputedStyle(document.getElementById('sa')),rc=ui.getBoundingClientRect();
+  const L=[`W×H ${W}×${H}  inner ${innerWidth}×${innerHeight}`,`vv ${vv?Math.round(vv.width)+'×'+Math.round(vv.height)+' @'+Math.round(vv.offsetTop):'-'}  screen ${screen.width}×${screen.height}`,
+    `rect ${Math.round(rc.left)},${Math.round(rc.top)} ${Math.round(rc.width)}×${Math.round(rc.height)}  dpr ${dpr}`,`safe T${sa.paddingTop} B${sa.paddingBottom} L${sa.paddingLeft} R${sa.paddingRight}`,
+    `standalone ${navigator.standalone} rot ${rot} S ${S.toFixed(3)}`];
+  g.fillStyle='rgba(0,0,0,.75)';g.fillRect(8,60,330,L.length*16+8);g.fillStyle='#0f0';L.forEach((t,i)=>g.fillText(t,12,64+i*16));
+  if(diagP){g.strokeStyle='#ff0';g.lineWidth=2;g.beginPath();g.moveTo(diagP.cx-20,diagP.cy);g.lineTo(diagP.cx+20,diagP.cy);g.moveTo(diagP.cx,diagP.cy-20);g.lineTo(diagP.cx,diagP.cy+20);g.stroke()}
+}
 function drawUI(){
   g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,ui.width,ui.height);base();
   if(!has3D){g.fillStyle='#16206a';g.fillRect(0,FY0,FW,FL);P.forEach(p=>sq(p.x,p.y,MR*2,COL[p.i]));sq(puck.x,puck.y,PR*2,'#fff');
@@ -1288,11 +1309,12 @@ function drawUI(){
   if(mode==='online'&&NET.open&&NET.rtt>=0&&state!=='lobby'){const me=NET.role==='guest'?1:0,r=Math.round(NET.rtt); // RTT(ms)
     frame(me,()=>ptext(String(r),FW-20,FY1+TRAY+18,8,r<60?'#55ff55':r<120?YEL:'#ff0055',PIX,'right'))}
 }
+function drawAll(){drawUI();if(DIAG)drawDiag()}
 let last=performance.now();
 function loop(t){
-  if(ui.clientWidth!==W||ui.clientHeight!==H)resize(); // 表示サイズが変わっていたら即座に測り直す（タッチ位置のずれ防止）
+  {const [w,h]=measure();if(w!==W||h!==H)resize()} // 表示サイズが変わっていたら即座に測り直す（タッチ位置のずれ防止）
   const dt=Math.min(.033,Math.max(.001,(t-last)/1000));last=t;
-  try{if(hitstop>0){hitstop-=dt;clock+=dt*.2}else update(dt);shake*=Math.exp(-dt*9);ab=Math.max(0,ab-dt*4);railFlash=Math.max(0,railFlash-dt);rallyPop=Math.max(0,rallyPop-dt);if(has3D)render3D();drawUI();hostFlush()}catch(err){console.error(err)}
+  try{if(hitstop>0){hitstop-=dt;clock+=dt*.2}else update(dt);shake*=Math.exp(-dt*9);ab=Math.max(0,ab-dt*4);railFlash=Math.max(0,railFlash-dt);rallyPop=Math.max(0,rallyPop-dt);if(has3D)render3D();drawAll();hostFlush()}catch(err){console.error(err)}
   requestAnimationFrame(loop);
 }
 applyTheme();if(has3D){build3D();applyTheme()}
