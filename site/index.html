@@ -66,6 +66,10 @@ const kawaii=()=>TH.st===1;
 const lite=()=>TH.lv>=1,minimal=()=>TH.lv===2;
 try{const t=JSON.parse(localStorage.getItem('ah_theme')||'{}');for(const k in TH)if(THEMES[k][t[k]])TH[k]=t[k]}catch(e){}
 let FXT=THEMES.fx[0],PK=THEMES.puck[0];
+/* ゲーム全体の速度（OPTION のバー）：0.5〜1.5 倍。物理・タイマー・CPU がこの倍率で進む。オンラインはホストの設定が両者に適用される */
+const SPD_MIN=.5,SPD_MAX=1.5,SPD_N=Math.round((SPD_MAX-SPD_MIN)*10)+1;
+let SPD=1;try{const v=parseFloat(localStorage.getItem('ah_speed'));if(v>=SPD_MIN&&v<=SPD_MAX)SPD=Math.round(v*10)/10}catch(e){}
+function setSpeed(v){SPD=clamp(Math.round(v*10)/10,SPD_MIN,SPD_MAX);try{localStorage.setItem('ah_speed',String(SPD))}catch(e){}}
 
 let W=0,H=0,dpr=1,rot=false,S=1,OX=0,OY=0;
 let state='title',goalT=0,overT=0,lastScorer=0,ts=1,clock=0,flash=0;
@@ -519,7 +523,7 @@ function hostFlush(){
 }
 const r1=v=>Math.round(v*10)/10,r3=v=>Math.round(v*1000)/1000;
 function snapMsg(now){
-  return {t:'snap',ht:now,st:state,gt:r3(goalT),ot:r3(overT),lv:live?1:0,ts:r3(ts),ls:lastScorer,
+  return {t:'snap',ht:now,st:state,gt:r3(goalT),ot:r3(overT),lv:live?1:0,ts:r3(ts),sp:SPD,ls:lastScorer,
     pk:[r1(puck.x),r1(puck.y),r1(puck.vx),r1(puck.vy),r3(puck.air),puck.airT,r3(puck.hold),puck.side,puck.boom?1:0,puck.inMud?1:0],
     m:P.map(p=>[r1(p.x),r1(p.y)]),sc:P.map(p=>p.score),it:P.map(p=>p.items),
     bx:P.map(p=>[p.box.on?1:0,r1(p.box.x),r1(p.box.y),r3(p.box.cd),r3(p.box.spin)]),
@@ -580,20 +584,20 @@ function guestUpdate(dt){
   // パック：2スナップ間を線形補間（次が無ければ速度で少しだけ外挿）
   const ox=puck.x,oy=puck.y;let ix,iy;
   if(b&&Math.hypot(b.pk[0]-a.pk[0],b.pk[1]-a.pk[1])<300){ix=L('pk',0);iy=L('pk',1)}
-  else{const e=b?0:clamp(rt-a.ht,0,DMAX)/1000*(state==='play'?1:0)*ts;ix=clamp(a.pk[0]+a.pk[2]*e,PR,FW-PR);iy=a.pk[1]+a.pk[3]*e}
+  else{const e=b?0:clamp(rt-a.ht,0,DMAX)/1000*(state==='play'?1:0)*ts*(a.sp||1);ix=clamp(a.pk[0]+a.pk[2]*e,PR,FW-PR);iy=a.pk[1]+a.pk[3]*e}
   // 自陣（上半分）では「いまホストに届く入力が当たる位置」まで最新スナップショットから外挿して描く
   // （＝打ってから反応までの遅れを往復時間だけに縮める）。相手陣地は従来どおり補間（相手の打撃を正しく見せる）
   const Z=S[S.length-1],zk=Z.pk,live2=state==='play'&&!zk[9]&&!zk[8];
   let rx=ix,ry=iy;
   if(live2){
-    const t=clamp(hnow()+(NET.off||0)+Math.max(0,NET.rtt)-Z.ht,0,120)/1000*Z.ts;
+    const t=clamp(hnow()+(NET.off||0)+Math.max(0,NET.rtt)-Z.ht,0,120)/1000*Z.ts*(Z.sp||1);
     let ex=fold(zk[0]+zk[2]*t),ey=zk[1]+zk[3]*t;
     if(Math.abs(ex-FW/2)>=GW/2){if(ey<FY0+PR)ey=2*(FY0+PR)-ey;if(ey>FY1-PR)ey=2*(FY1-PR)-ey}
     const w=clamp((MID+60-zk[1])/160,0,1);rx=ix+(ex-ix)*w;ry=iy+(ey-iy)*w;
   }
   // 予測が外れたときの飛びは 40ms ほどでなめらかに戻す
   const pr=NET.praw,E=NET.perr||(NET.perr={x:0,y:0});
-  if(pr){const dx=rx-(pr.x+zk[2]*dt*Z.ts),dy=ry-(pr.y+zk[3]*dt*Z.ts);if(Math.hypot(dx,dy)>150){E.x=E.y=0}else{E.x-=dx;E.y-=dy}}
+  if(pr){const dx=rx-(pr.x+zk[2]*dt*Z.ts*(Z.sp||1)),dy=ry-(pr.y+zk[3]*dt*Z.ts*(Z.sp||1));if(Math.hypot(dx,dy)>150){E.x=E.y=0}else{E.x-=dx;E.y-=dy}}
   NET.praw={x:rx,y:ry};const k=Math.exp(-dt*25);E.x*=k;E.y*=k;
   puck.x=rx+E.x;puck.y=ry+E.y;
   // 見た目だけ：自分のマレットにめり込ませない
@@ -718,7 +722,7 @@ function down(e){
 function pdown(id,x,y){
   if(rctx&&state!=='play'&&state!=='goal'&&state!=='over')return;
   if(state==='title'){const l=local(0,x,y);if(fsHit(x,y))return;for(const b of BTN){const by=btnY(b);if(l.u>b.x&&l.u<b.x+b.w&&l.v>by&&l.v<by+BH){if(b.m==='opt'){state='options';beep(660,.05)}else if(b.m==='net'){if(window.Peer){state='lobby';LOB.sub='menu';beep(660,.05)}else{beep(150,.12)}}else start(b.m,b.l);return}}return}
-  if(state==='options'){optTap(local(0,x,y));return}
+  if(state==='options'){optTap(local(0,x,y),id);return}
   if(state==='over'){if(overT>1.5){if(mode==='online'){toLobby()}else{state='title';placed.forEach(drop);placed=[];beep(660,.06)}}return}
   if(state==='pause'){const i=y>MID?0:1;if(!pzShow(i)||!ctl(i))return;const h=pauseHit(i,x,y);if(h==='play')resumeGame();else if(h==='quit')quitGame();return}
   for(const i of [0,1]){
@@ -741,6 +745,7 @@ function move(e){
   pmove(e.pointerId,x,y);
 }
 function pmove(id,x,y){
+  if(id===spdPtr){const v=spdAt(local(0,x,y).u);if(v!==SPD){setSpeed(v);beep(400+SPD*400,.03)}return}
   const d=drags.get(id);if(d){d.x=x;d.y=y;return}
   for(const p of P)if(p.ptr===id)aim(p,x,y);
 }
@@ -751,6 +756,7 @@ function up(e){
   noFwd=true;try{pup(e.pointerId,x,y,e.type)}finally{noFwd=false}
 }
 function pup(id,x,y,type){
+  if(id===spdPtr){spdPtr=null;return}
   const d=drags.get(id);
   if(d){drags.delete(id);d.x=x;d.y=y;
     const inField=y>FY0&&y<FY1,okPos=validPos(d.i,ghost(d).y);
@@ -834,18 +840,18 @@ function update(dt){
   for(const i of [0,1])if(arm[i]){const a=arm[i];a.t-=dt;if(P[i].items[a.slot]!==a.type||state!=='play')arm[i]=null;else if(a.t<=0){arm[i]=null;expire(i,a.slot,a.type)}}
   for(const [id,d] of drags){d.t-=dt;if(d.t<=0||state!=='play'){drags.delete(id);if(d.t<=0)expire(d.i,d.slot,d.type)}}
   ts+=((drags.size||arm[0]||arm[1]?.15:1)-ts)*Math.min(1,dt*12);
-  const gd=dt*ts;
+  const gd=dt*ts*SPD;
   for(const p of P)p.fl=Math.max(0,p.fl-dt);zoneFl=Math.max(0,zoneFl-dt);
   for(const f of fx)f.t+=dt;
   for(let k=fx.length-1;k>=0;k--)if(fx[k].t>fx[k].life)fx.splice(k,1);
   if(state==='over'){overT+=dt;return}
   if(state==='title'||state==='options'||state==='lobby')return;
-  cpuUpdate(dt);
+  cpuUpdate(dt*SPD);
   const ms=P.map(p=>{
-    const ox=p.x,oy=p.y;let dx=p.tx-ox,dy=p.ty-oy;const inM=placed.some(it=>it.type==='mud'&&Math.hypot(ox-it.x,oy-it.y)<IT.mud.r);const d=Math.hypot(dx,dy),mx=(p.maxV||3400)*(p.boost||1)*(inM?.4:1)*dt;
+    const ox=p.x,oy=p.y;let dx=p.tx-ox,dy=p.ty-oy;const inM=placed.some(it=>it.type==='mud'&&Math.hypot(ox-it.x,oy-it.y)<IT.mud.r);const d=Math.hypot(dx,dy),mx=(p.maxV||3400)*(p.boost||1)*(inM?.4:1)*(p.maxV?dt*SPD:dt); // 人の指に追従するマレットは実時間、CPUは世界の速度に合わせる
     if(inM&&d>5&&Math.random()<dt*10)addFx('bubble',ox+rnd(-30,30),oy+rnd(-30,30),.7);
     if(d>mx){dx*=mx/d;dy*=mx/d}
-    p.x=ox+dx;p.y=oy+dy;p.vx=dx/dt;p.vy=dy/dt;
+    p.x=ox+dx;p.y=oy+dy;p.vx=dx/(dt*SPD);p.vy=dy/(dt*SPD); // マレットの速度は世界の時間で表す（衝突の強さ）
     return {i:p.i,ox,oy,nx:p.x,ny:p.y,vx:p.vx,vy:p.vy,x:ox,y:oy};
   });
   if(!isFinite(puck.x)||!isFinite(puck.y)||!isFinite(puck.vx)||!isFinite(puck.vy)||puck.x<-50||puck.x>FW+50){serve(puck.y<MID?1:0)}
@@ -1145,9 +1151,11 @@ function panel(i,lines,col,h=230){
     lines.forEach(l=>{if(l.blink&&!blink(2))return;ptext(l.t,FW/2,y+l.y,l.s,l.c||'#fff',l.f||PIX)});
   });
 }
-const OY0=MID+12,OPT_ROWS=['puck','field','st','fx','lv'],OPT_LBL={puck:'PUCK',field:'FIELD',st:'FX STYLE',fx:'FX COLOR',lv:'FX LEVEL'},rowY=k=>OY0+58+k*71,OK_Y=OY0+418;
-function optTap(l){
-  OPT_ROWS.forEach((key,k)=>{const y=rowY(k);if(l.v<y||l.v>y+66)return;const n=THEMES[key].length;
+const OY0=MID+12,OPT_ROWS=['puck','field','st','fx','lv'],OPT_LBL={puck:'PUCK',field:'FIELD',st:'FX STYLE',fx:'FX COLOR',lv:'FX LEVEL'},rowY=k=>OY0+54+k*60,SP_Y=OY0+354,OK_Y=OY0+418,SB_X=96,SB_W=37;
+let spdPtr=null;const spdAt=u=>SPD_MIN+clamp(Math.floor((u-SB_X+3)/SB_W),0,SPD_N-1)/10;
+function optTap(l,id){
+  if(l.v>=SP_Y-2&&l.v<=SP_Y+58&&l.u>56&&l.u<544){setSpeed(spdAt(l.u));spdPtr=id;beep(400+SPD*400,.04);return}
+  OPT_ROWS.forEach((key,k)=>{const y=rowY(k);if(l.v<y||l.v>y+58)return;const n=THEMES[key].length;
     if(l.u>56&&l.u<136){TH[key]=(TH[key]+n-1)%n;applyTheme();beep(520,.04)}else if(l.u>464&&l.u<544){TH[key]=(TH[key]+1)%n;applyTheme();beep(780,.04)}});
   if(l.v>OK_Y&&l.v<OK_Y+52&&l.u>200&&l.u<400){state='title';beep(880,.05)}
 }
@@ -1157,15 +1165,21 @@ function drawOptions(){
   frame(0,()=>{pbox(36,OY0,FW-72,484,COL[0]);ptext('OPTION',FW/2,OY0+30,18,YEL);
     OPT_ROWS.forEach((key,k)=>{const y=rowY(k),t=THEMES[key][TH[key]];
       ptext(OPT_LBL[key],FW/2,y+4,9,'#888');
-      for(const [x,ch] of [[56,'<'],[464,'>']]){pbox(x,y+12,80,50,'#666');ptext(ch,x+40,y+38,18,'#fff')}
-      ptext(t.n,FW/2,y+28,13,'#fff');
-      const py=y+52;
+      for(const [x,ch] of [[56,'<'],[464,'>']]){pbox(x,y+8,80,46,'#666');ptext(ch,x+40,y+32,18,'#fff')}
+      ptext(t.n,FW/2,y+24,13,'#fff');
+      const py=y+44;
       if(key==='puck'){circle(FW/2,py,12,'#000');circle(FW/2,py,10,t.b);g.strokeStyle=t.r;g.lineWidth=3;g.beginPath();g.arc(FW/2,py,6,0,7);g.stroke()}
       else if(key==='field'){[0,1].forEach(j=>{g.fillStyle='#000';g.fillRect(FW/2-46+j*48,py-9,44,18);g.fillStyle=t.h[1-j];g.fillRect(FW/2-44+j*48,py-7,40,14);g.fillStyle=t.c[j];g.fillRect(FW/2-36+j*48,py-4,24,8)})}
       else if(key==='st'){if(TH.st){ks('heart',FW/2-30,py,16,FXT.tr[0]);ks('star',FW/2,py,18,FXT.tr[2]);ks('spark',FW/2+30,py,16,'#fff')}else for(let j=0;j<3;j++){sq(FW/2-30+j*30,py,14,'#000');sq(FW/2-30+j*30,py,10,FXT.spk[j+1])}}
       else if(key==='fx')t.spk.concat(t.tr.slice(0,2)).forEach((c,j)=>sq(FW/2-50+j*20,py,j%2?9:12,c));
       else for(let j=0;j<5;j++)sq(FW/2-40+j*20,py,6,j<[5,2,1][TH.lv]?'#fff':'#333');
     });
+    { // SPEED：11段のドットバー（左＝遅い／右＝速い）。1.0倍の位置に目印
+      const y=SP_Y,cur=Math.round((SPD-SPD_MIN)*10);ptext('SPEED',FW/2,y+4,9,'#888');
+      for(let j=0;j<SPD_N;j++){const x=SB_X+j*SB_W,on=j<=cur,h=14+j*2,by=y+38-h;
+        g.fillStyle='#000';g.fillRect(x-3,by-3,SB_W-4+6,h+6);g.fillStyle=j===cur?(blink(4)?YEL:'#fff'):on?COL[0]:'#333';g.fillRect(x,by,SB_W-4,h)}
+      sq(SB_X+5*SB_W+(SB_W-4)/2,y+46,6,'#888');
+      ptext('x'+SPD.toFixed(1),FW/2,y+54,12,SPD===1?'#fff':YEL)}
     pbox(200,OK_Y,200,52,blink(2)?YEL:'#fff','#1a1a1a');ptext('OK',FW/2,OK_Y+28,18,'#fff');
   });
   frame(1,()=>{pbox(36,TY0+110,FW-72,120,COL[1]);ptext('AIR HOCKEY',FW/2,TY0+172,34,YEL)});
@@ -1223,7 +1237,7 @@ addEventListener('resize',resize);resize();
 if(document.fonts&&document.fonts.load){document.fonts.load('20px "Press Start 2P"');document.fonts.load('20px DotGothic16')}
 requestAnimationFrame(loop);
 // 開発・テスト用（?debug のときだけ）：状態の参照と論理座標→画面座標
-if(/[?&]debug/.test(location.search))window.__AH={NET,LOB,get P(){return P},puck,get arm(){return arm},get drags(){return [...drags.values()]},get placed(){return placed},get state(){return state},get mode(){return mode},get live(){return live},get ts(){return ts},get fx(){return fx},get viewFlip(){return viewFlip},
+if(/[?&]debug/.test(location.search))window.__AH={get SPD(){return SPD},NET,LOB,get P(){return P},puck,get arm(){return arm},get drags(){return [...drags.values()]},get placed(){return placed},get state(){return state},get mode(){return mode},get live(){return live},get ts(){return ts},get fx(){return fx},get viewFlip(){return viewFlip},
   scr(x,y){if(viewFlip){x=FW-x;y=TL-y}return rot?{x:OX+y*S,y:OY+(FW-x)*S}:{x:OX+x*S,y:OY+y*S}},give(i,k){P[i].items.push(k)},rx,pdown,ctl};
 }
 </script>
