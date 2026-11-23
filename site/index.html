@@ -22,8 +22,8 @@
 :root{color-scheme:dark;--sat:env(safe-area-inset-top,0px);--sar:env(safe-area-inset-right,0px);--sab:env(safe-area-inset-bottom,0px);--sal:env(safe-area-inset-left,0px)}
 #sa{position:fixed;visibility:hidden;pointer-events:none;top:0;left:0;padding:var(--sat) var(--sar) var(--sab) var(--sal)}
 *{box-sizing:border-box;min-width:0}
-html,body{margin:0;height:100%;overflow:hidden;background:#000;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}
-canvas{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;display:block}
+html,body{margin:0;height:100%;overflow:hidden;touch-action:none;background:#000;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}
+canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実際の表示サイズを描画・タッチ判定の基準にする（iOSのホーム画面起動で innerHeight とずれるため） */
 #gl{pointer-events:none;image-rendering:pixelated}#ui{touch-action:none}
 .crt{position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(to bottom,rgba(0,0,0,.3) 0 1px,transparent 1px 3px)}
 .crt::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 58%,rgba(0,0,0,.6) 100%)}
@@ -74,7 +74,7 @@ const SPD_MIN=.5,SPD_MAX=1.5,SPD_N=Math.round((SPD_MAX-SPD_MIN)*10)+1;
 let SPD=1;try{const v=parseFloat(localStorage.getItem('ah_speed'));if(v>=SPD_MIN&&v<=SPD_MAX)SPD=Math.round(v*10)/10}catch(e){}
 function setSpeed(v){SPD=clamp(Math.round(v*10)/10,SPD_MIN,SPD_MAX);try{localStorage.setItem('ah_speed',String(SPD))}catch(e){}}
 
-let W=0,H=0,dpr=1,rot=false,S=1,OX=0,OY=0;
+let W=0,H=0,dpr=1,rot=false,S=1,OX=0,OY=0,VX=0,VY=0;
 let state='title',goalT=0,overT=0,lastScorer=0,ts=1,clock=0,flash=0;
 const drags=new Map(),fx=[],arm=[null,null];
 let placed=[];
@@ -237,7 +237,8 @@ function applyTheme(){
 }
 /* ================= 画面とタッチ座標 ================= */
 function resize(){
-  dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;
+  dpr=Math.min(devicePixelRatio||1,2);
+  const rc=ui.getBoundingClientRect();W=Math.round(rc.width)||innerWidth;H=Math.round(rc.height)||innerHeight;VX=rc.left;VY=rc.top;
   ui.width=W*dpr;ui.height=H*dpr;rot=W>H;
   // safe-area（ホームインジケータ・ノッチ）分だけ内側に収める。3Dカメラと合わせるため左右・上下は対称に取る
   let ix=0,iy=0;try{const c=getComputedStyle(document.getElementById('sa'));ix=Math.max(parseFloat(c.paddingLeft)||0,parseFloat(c.paddingRight)||0);iy=Math.max(parseFloat(c.paddingTop)||0,parseFloat(c.paddingBottom)||0)}catch(e){}
@@ -257,7 +258,7 @@ function base(){
   g.imageSmoothingEnabled=false;
   if(shake>.3)g.translate(-(hash(clock*61)-.5)*shake,-(hash(clock*37+3)-.5)*shake);
 }
-function toL(cx,cy){const q=rot?{x:FW-(cy-OY)/S,y:(cx-OX)/S}:{x:(cx-OX)/S,y:(cy-OY)/S};return viewFlip?{x:FW-q.x,y:TL-q.y}:q}
+function toL(cx,cy){cx-=VX;cy-=VY;const q=rot?{x:FW-(cy-OY)/S,y:(cx-OX)/S}:{x:(cx-OX)/S,y:(cy-OY)/S};return viewFlip?{x:FW-q.x,y:TL-q.y}:q}
 const local=(i,x,y)=>i?{u:FW-x,v:TL-y}:{u:x,v:y};
 function frame(i,fn){g.save();if(i){g.translate(FW,TL);g.rotate(Math.PI)}fn();g.restore()}
 const slotX=s=>222+s*100,SLOT_Y=FY1+58;
@@ -266,7 +267,7 @@ function slotAt(u,v){for(let s=0;s<3;s++)if(Math.abs(u-slotX(s))<46&&Math.abs(v-
 
 /* ================= 音（チップチューン） ================= */
 let ac=null;
-function unlock(){if(ac)return;try{ac=new (window.AudioContext||window.webkitAudioContext)();ac.resume&&ac.resume()}catch(e){ac=null}}
+function unlock(){if(ac){if(ac.state!=='running'&&ac.resume)try{ac.resume()}catch(e){}return}try{ac=new (window.AudioContext||window.webkitAudioContext)();ac.resume&&ac.resume()}catch(e){ac=null}}
 function _beep(f,d=.06,type='square',v=.06,at=0){
   if(!ac)return;try{const o=ac.createOscillator(),gn=ac.createGain(),t=ac.currentTime+at;
   o.type=type;o.frequency.setValueAtTime(f,t);gn.gain.setValueAtTime(v,t);gn.gain.setValueAtTime(v,t+d*.7);gn.gain.exponentialRampToValueAtTime(.0001,t+d);
@@ -1289,17 +1290,23 @@ function drawUI(){
 }
 let last=performance.now();
 function loop(t){
+  if(ui.clientWidth!==W||ui.clientHeight!==H)resize(); // 表示サイズが変わっていたら即座に測り直す（タッチ位置のずれ防止）
   const dt=Math.min(.033,Math.max(.001,(t-last)/1000));last=t;
   try{if(hitstop>0){hitstop-=dt;clock+=dt*.2}else update(dt);shake*=Math.exp(-dt*9);ab=Math.max(0,ab-dt*4);railFlash=Math.max(0,railFlash-dt);rallyPop=Math.max(0,rallyPop-dt);if(has3D)render3D();drawUI();hostFlush()}catch(err){console.error(err)}
   requestAnimationFrame(loop);
 }
 applyTheme();if(has3D){build3D();applyTheme()}
 addEventListener('resize',resize);resize();
+// iOS（特にホーム画面起動）は回転・復帰の直後にサイズの反映が遅れるので、少し遅らせて測り直す
+const resizeSoon=()=>{for(const t of [0,120,350,800])setTimeout(resize,t)};
+addEventListener('orientationchange',resizeSoon);addEventListener('pageshow',resizeSoon);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)resizeSoon()});
+if(window.visualViewport)visualViewport.addEventListener('resize',resizeSoon);
 if(document.fonts&&document.fonts.load){document.fonts.load('20px "Press Start 2P"');document.fonts.load('20px DotGothic16')}
 requestAnimationFrame(loop);
 // 開発・テスト用（?debug のときだけ）：状態の参照と論理座標→画面座標
 if(/[?&]debug/.test(location.search))window.__AH={get SPD(){return SPD},NET,LOB,get P(){return P},puck,get arm(){return arm},get drags(){return [...drags.values()]},get placed(){return placed},get state(){return state},get mode(){return mode},get live(){return live},get ts(){return ts},get fx(){return fx},get viewFlip(){return viewFlip},
-  scr(x,y){if(viewFlip){x=FW-x;y=TL-y}return rot?{x:OX+y*S,y:OY+(FW-x)*S}:{x:OX+x*S,y:OY+y*S}},give(i,k){P[i].items.push(k)},spawnFx(k,x,y,sc,col,ex){const f=addFx(k,x,y,sc,'',col);if(f&&ex)Object.assign(f,ex);return !!f},setTH(o){Object.assign(TH,o);applyTheme()},rx,pdown,ctl};
+  scr(x,y){if(viewFlip){x=FW-x;y=TL-y}return rot?{x:VX+OX+y*S,y:VY+OY+(FW-x)*S}:{x:VX+OX+x*S,y:VY+OY+y*S}},give(i,k){P[i].items.push(k)},spawnFx(k,x,y,sc,col,ex){const f=addFx(k,x,y,sc,'',col);if(f&&ex)Object.assign(f,ex);return !!f},setTH(o){Object.assign(TH,o);applyTheme()},rx,pdown,ctl};
 }
 </script>
 </body>
