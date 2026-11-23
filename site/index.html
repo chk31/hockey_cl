@@ -410,9 +410,9 @@ const PEER_CONFIG={debug:1,config:{iceServers:[
   // 別回線でつながらないときは TURN を追加：{urls:'turn:turn.example.com:3478',username:'USER',credential:'PASS'}
 ]}};
 try{const q=new URLSearchParams(location.search).get('ps');if(q){const [h,pt]=q.split(':');Object.assign(PEER_CONFIG,{host:h,port:+pt||9000,path:'/',secure:false})}}catch(e){} // 開発用：?ps=localhost:9000 で自前のPeerServer
-const PV=1,PREFIX='aihockey-',DELAY=100,SNAP_MS=33,TIMEOUT=3000;
+const PV=1,PREFIX='aihockey-',DMIN=25,DMAX=120,SNAP_MS=15,TIMEOUT=3000;
 let viewFlip=false,noFwd=false,rctx=false;
-const NET={role:null,peer:null,ev:null,st:null,gp:null,open:false,code:'',fxq:[],evq:[],snaps:[],applied:null,off:null,lastRx:0,lastSnap:0,lastPing:0,rtt:-1,ptrs:new Map(),myPtr:null,seq:0,rseq:new Map(),disc:0,cto:0};
+const NET={role:null,peer:null,ev:null,st:null,gp:null,open:false,code:'',fxq:[],evq:[],snaps:[],applied:null,off:null,lastRx:0,lastSnap:0,lastPing:0,rtt:-1,ptrs:new Map(),myPtr:null,dly:60,jit:10,gap:17,lastHt:0,seq:0,rseq:new Map(),disc:0,cto:0};
 const LOB={sub:'menu',input:'',err:0,busy:false};
 const hnow=()=>performance.now();
 const relayOn=()=>NET.role==='host'&&mode==='online'&&NET.open&&!noFwd;
@@ -422,7 +422,7 @@ const uk=c=>c==='@0'?COL[0]:c==='@1'?COL[1]:c;
 const guestOn=()=>NET.role==='guest'&&mode==='online'&&(state==='play'||state==='goal'||state==='over'||state==='pause');
 function send(m,fast){m.v=PV;const c=fast&&NET.st&&NET.st.open?NET.st:NET.ev;if(c&&c.open)try{c.send(m)}catch(e){}}
 function setFlip(f){if(viewFlip!==f){viewFlip=f;resize()}}
-function clearMatch(){placed.forEach(drop);placed=[];drags.clear();arm[0]=arm[1]=null;fx.length=0;NET.snaps=[];NET.evq=[];NET.applied=null;NET.myPtr=null;NET.ptrs.clear();ts=1}
+function clearMatch(){NET.lastHt=0;placed.forEach(drop);placed=[];drags.clear();arm[0]=arm[1]=null;fx.length=0;NET.snaps=[];NET.evq=[];NET.applied=null;NET.myPtr=null;NET.ptrs.clear();ts=1}
 function netReset(){
   const pr=NET.peer,cs=[NET.ev,NET.st];
   Object.assign(NET,{peer:null,role:null,ev:null,st:null,gp:null,open:false,fxq:[],off:null,rtt:-1});clearTimeout(NET.cto);LOB.busy=false;
@@ -495,7 +495,11 @@ function rx(d){
   switch(d.t){
   case 'start':clearMatch();mode='online';P=[mk(0),mk(1)];state='play';live=false;setFlip(true);_seq([523,659,784,1047,0,784,1047],.08);break;
   case 'lobby':if(mode==='online')toLobby();break;
-  case 'snap':{if(mode!=='online')return;const s=d.ht-hnow();if(NET.off==null||s>NET.off)NET.off=s;else NET.off+=(s-NET.off)*.02;
+  case 'snap':{if(mode!=='online')return;
+    // 表示遅延を回線に合わせる：最小遅延を基準(off)に、届くのが遅れた分(late)の揺れ(jit)と送信間隔(gap)だけ待つ
+    const s=d.ht-hnow();if(NET.off==null||s>NET.off)NET.off=s;else NET.off-=.03;
+    NET.jit=Math.max(NET.off-s,NET.jit*.99);
+    if(NET.lastHt&&d.ht>NET.lastHt)NET.gap+=(Math.min(100,d.ht-NET.lastHt)-NET.gap)*.1;NET.lastHt=Math.max(NET.lastHt,d.ht);
     const S=NET.snaps;if(S.length&&d.ht<=S[S.length-1].ht){if(!S.some(x=>x.ht===d.ht)){S.push(d);S.sort((a,b)=>a.ht-b.ht)}}else S.push(d);
     if(S.length>40)S.splice(0,S.length-40);break}
   case 'ev':if(mode==='online')for(const e of d.l)NET.evq.push(e);break;
@@ -557,7 +561,8 @@ function guestUpdate(dt){
   for(const p of P)p.fl=Math.max(0,p.fl-dt);zoneFl=Math.max(0,zoneFl-dt);
   for(const f of fx)f.t+=dt;
   for(let k=fx.length-1;k>=0;k--)if(fx[k].t>fx[k].life)fx.splice(k,1);
-  const rt=hnow()+(NET.off||0)-DELAY;
+  NET.dly+=(clamp(NET.gap+NET.jit+6,DMIN,DMAX)-NET.dly)*Math.min(1,dt*2);
+  const rt=hnow()+(NET.off||0)-NET.dly;
   // エフェクト・音（ホストの発生時刻に合わせて再生）
   while(NET.evq.length&&(NET.off==null||NET.evq[0][0]<=rt)){const e=NET.evq.shift();
     if(e[1]==='f'){const f=addFx0(e[2],e[3],e[4],e[5],e[6],uk(e[7]));if(f)Object.assign(f,e[8]||{})}
@@ -572,7 +577,7 @@ function guestUpdate(dt){
   // パック：2スナップ間を線形補間（次が無ければ速度で少しだけ外挿）
   const ox=puck.x,oy=puck.y;
   if(b&&Math.hypot(b.pk[0]-a.pk[0],b.pk[1]-a.pk[1])<300){puck.x=L('pk',0);puck.y=L('pk',1)}
-  else{const e=b?0:clamp(rt-a.ht,0,DELAY)/1000*(state==='play'?1:0)*ts;puck.x=clamp(a.pk[0]+a.pk[2]*e,PR,FW-PR);puck.y=a.pk[1]+a.pk[3]*e}
+  else{const e=b?0:clamp(rt-a.ht,0,DMAX)/1000*(state==='play'?1:0)*ts;puck.x=clamp(a.pk[0]+a.pk[2]*e,PR,FW-PR);puck.y=a.pk[1]+a.pk[3]*e}
   puck.vx=a.pk[2];puck.vy=a.pk[3];
   if(Math.hypot(puck.x-ox,puck.y-oy)>200)puck.trail=[];
   puck.trail.push({x:puck.x,y:puck.y,sp:Math.hypot(puck.vx,puck.vy)});if(puck.trail.length>10)puck.trail.shift();
