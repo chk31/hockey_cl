@@ -422,7 +422,7 @@ const uk=c=>c==='@0'?COL[0]:c==='@1'?COL[1]:c;
 const guestOn=()=>NET.role==='guest'&&mode==='online'&&(state==='play'||state==='goal'||state==='over'||state==='pause');
 function send(m,fast){m.v=PV;const c=fast&&NET.st&&NET.st.open?NET.st:NET.ev;if(c&&c.open)try{c.send(m)}catch(e){}}
 function setFlip(f){if(viewFlip!==f){viewFlip=f;resize()}}
-function clearMatch(){NET.lastHt=0;placed.forEach(drop);placed=[];drags.clear();arm[0]=arm[1]=null;fx.length=0;NET.snaps=[];NET.evq=[];NET.applied=null;NET.myPtr=null;NET.ptrs.clear();ts=1}
+function clearMatch(){NET.lastHt=0;NET.praw=null;NET.perr=null;placed.forEach(drop);placed=[];drags.clear();arm[0]=arm[1]=null;fx.length=0;NET.snaps=[];NET.evq=[];NET.applied=null;NET.myPtr=null;NET.ptrs.clear();ts=1}
 function netReset(){
   const pr=NET.peer,cs=[NET.ev,NET.st];
   Object.assign(NET,{peer:null,role:null,ev:null,st:null,gp:null,open:false,fxq:[],off:null,rtt:-1});clearTimeout(NET.cto);LOB.busy=false;
@@ -502,7 +502,9 @@ function rx(d){
     if(NET.lastHt&&d.ht>NET.lastHt)NET.gap+=(Math.min(100,d.ht-NET.lastHt)-NET.gap)*.1;NET.lastHt=Math.max(NET.lastHt,d.ht);
     const S=NET.snaps;if(S.length&&d.ht<=S[S.length-1].ht){if(!S.some(x=>x.ht===d.ht)){S.push(d);S.sort((a,b)=>a.ht-b.ht)}}else S.push(d);
     if(S.length>40)S.splice(0,S.length-40);break}
-  case 'ev':if(mode==='online')for(const e of d.l)NET.evq.push(e);break;
+  case 'ev':if(mode!=='online')break;
+    // 自陣（上半分）で起きたエフェクト・音は待たずに即再生（打った手応えを遅らせない）
+    if(guestOn()&&d.l.some(e=>e[1]==='f'&&e[4]<MID))d.l.forEach(playEv);else for(const e of d.l)NET.evq.push(e);break;
   }
 }
 /* ---- ホスト：毎フレームの送信 ---- */
@@ -557,6 +559,11 @@ function applySnap(a){
   old.forEach(drop);
   arm[0]=arm[1]=null;a.ar.forEach((q,i)=>{if(q)arm[i]={slot:q[0],type:q[1],t:q[2]}});
 }
+function playEv(e){
+if(e[1]==='f'){const f=addFx0(e[2],e[3],e[4],e[5],e[6],uk(e[7]));if(f)Object.assign(f,e[8]||{})}
+    else if(e[1]==='s'){const fn=SND[e[2]];if(fn)fn(...e[3])}
+    else if(e[1]==='j')juice(e[2],0,e[4],e[5],uk(e[6]));
+    else if(e[1]==='z')zoneFl=.6}
 function guestUpdate(dt){
   for(const p of P)p.fl=Math.max(0,p.fl-dt);zoneFl=Math.max(0,zoneFl-dt);
   for(const f of fx)f.t+=dt;
@@ -564,21 +571,35 @@ function guestUpdate(dt){
   NET.dly+=(clamp(NET.gap+NET.jit+6,DMIN,DMAX)-NET.dly)*Math.min(1,dt*2);
   const rt=hnow()+(NET.off||0)-NET.dly;
   // エフェクト・音（ホストの発生時刻に合わせて再生）
-  while(NET.evq.length&&(NET.off==null||NET.evq[0][0]<=rt)){const e=NET.evq.shift();
-    if(e[1]==='f'){const f=addFx0(e[2],e[3],e[4],e[5],e[6],uk(e[7]));if(f)Object.assign(f,e[8]||{})}
-    else if(e[1]==='s'){const fn=SND[e[2]];if(fn)fn(...e[3])}
-    else if(e[1]==='j')juice(e[2],0,e[4],e[5],uk(e[6]));
-    else if(e[1]==='z')zoneFl=.6}
+  while(NET.evq.length&&(NET.off==null||NET.evq[0][0]<=rt))playEv(NET.evq.shift());
   const S=NET.snaps;if(!S.length)return;
   while(S.length>=2&&S[1].ht<=rt)S.shift();
   const a=S[0],b=S.length>1&&a.ht<=rt?S[1]:null,u=b?clamp((rt-a.ht)/(b.ht-a.ht),0,1):0;
   if(NET.applied!==a){NET.applied=a;applySnap(a)}
   const L=(i,j)=>b?a[i][j]+(b[i][j]-a[i][j])*u:a[i][j];
   // パック：2スナップ間を線形補間（次が無ければ速度で少しだけ外挿）
-  const ox=puck.x,oy=puck.y;
-  if(b&&Math.hypot(b.pk[0]-a.pk[0],b.pk[1]-a.pk[1])<300){puck.x=L('pk',0);puck.y=L('pk',1)}
-  else{const e=b?0:clamp(rt-a.ht,0,DMAX)/1000*(state==='play'?1:0)*ts;puck.x=clamp(a.pk[0]+a.pk[2]*e,PR,FW-PR);puck.y=a.pk[1]+a.pk[3]*e}
-  puck.vx=a.pk[2];puck.vy=a.pk[3];
+  const ox=puck.x,oy=puck.y;let ix,iy;
+  if(b&&Math.hypot(b.pk[0]-a.pk[0],b.pk[1]-a.pk[1])<300){ix=L('pk',0);iy=L('pk',1)}
+  else{const e=b?0:clamp(rt-a.ht,0,DMAX)/1000*(state==='play'?1:0)*ts;ix=clamp(a.pk[0]+a.pk[2]*e,PR,FW-PR);iy=a.pk[1]+a.pk[3]*e}
+  // 自陣（上半分）では「いまホストに届く入力が当たる位置」まで最新スナップショットから外挿して描く
+  // （＝打ってから反応までの遅れを往復時間だけに縮める）。相手陣地は従来どおり補間（相手の打撃を正しく見せる）
+  const Z=S[S.length-1],zk=Z.pk,live2=state==='play'&&!zk[9]&&!zk[8];
+  let rx=ix,ry=iy;
+  if(live2){
+    const t=clamp(hnow()+(NET.off||0)+Math.max(0,NET.rtt)-Z.ht,0,120)/1000*Z.ts;
+    let ex=fold(zk[0]+zk[2]*t),ey=zk[1]+zk[3]*t;
+    if(Math.abs(ex-FW/2)>=GW/2){if(ey<FY0+PR)ey=2*(FY0+PR)-ey;if(ey>FY1-PR)ey=2*(FY1-PR)-ey}
+    const w=clamp((MID+60-zk[1])/160,0,1);rx=ix+(ex-ix)*w;ry=iy+(ey-iy)*w;
+  }
+  // 予測が外れたときの飛びは 40ms ほどでなめらかに戻す
+  const pr=NET.praw,E=NET.perr||(NET.perr={x:0,y:0});
+  if(pr){const dx=rx-(pr.x+zk[2]*dt*Z.ts),dy=ry-(pr.y+zk[3]*dt*Z.ts);if(Math.hypot(dx,dy)>150){E.x=E.y=0}else{E.x-=dx;E.y-=dy}}
+  NET.praw={x:rx,y:ry};const k=Math.exp(-dt*25);E.x*=k;E.y*=k;
+  puck.x=rx+E.x;puck.y=ry+E.y;
+  // 見た目だけ：自分のマレットにめり込ませない
+  const me0=P[1],mdx=puck.x-me0.x,mdy=puck.y-me0.y,md=Math.hypot(mdx,mdy);
+  if(live2&&!zk[4]&&md<MR+PR&&md>.01){puck.x=me0.x+mdx/md*(MR+PR);puck.y=me0.y+mdy/md*(MR+PR)}
+  puck.vx=zk[2];puck.vy=zk[3];
   if(Math.hypot(puck.x-ox,puck.y-oy)>200)puck.trail=[];
   puck.trail.push({x:puck.x,y:puck.y,sp:Math.hypot(puck.vx,puck.vy)});if(puck.trail.length>10)puck.trail.shift();
   // 相手のマレットは補間、自分のマレットはローカル即時（ずれが大きいときだけホストへ寄せる）
