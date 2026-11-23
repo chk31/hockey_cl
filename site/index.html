@@ -1043,16 +1043,6 @@ function bq(x,y,s,c,bw=4){x=snap(x,6);y=snap(y,6);g.fillStyle='#000';g.fillRect(
 function sqS(x,y,h,lw,c){g.lineWidth=lw+6;g.strokeStyle='#000';g.strokeRect(x-h,y-h,h*2,h*2);g.lineWidth=lw;g.strokeStyle=c;g.strokeRect(x-h,y-h,h*2,h*2)}
 function bcross(x,y,L,c,w=4){g.fillStyle='#000';g.fillRect(x-L-2,y-w/2-2,L*2+4,w+4);g.fillRect(x-w/2-2,y-L-2,w+4,L*2+4);g.fillStyle=c;g.fillRect(x-L,y-w/2,L*2,w);g.fillRect(x-w/2,y-L,w,L*2)}
 function bseg(x0,y0,x1,y1,c,w){for(const [col,lw] of [['#000',w+5],[c,w]]){g.strokeStyle=col;g.lineWidth=lw;g.lineCap='butt';g.beginPath();g.moveTo(x0,y0);g.lineTo(x1,y1);g.stroke()}}
-/* 強打のグリッチ：3D盤面とUIを横短冊でずらす（画面座標で処理） */
-function glitch(f,amt){
-  if(lite()||calm())return;
-  const m=g.getTransform(),pt=m.transformPoint(new DOMPoint(f.x,f.y)),H=ui.height,Wd=ui.width,band=Math.min(H,260*S*dpr),y0=clamp(pt.y-band/2,0,H-band);
-  g.save();g.setTransform(1,0,0,1,0,0);
-  for(let k=0;k<8;k++){const sy=y0+((k*97+Math.floor(f.a0*10))%100)/100*band,sh=Math.max(4,(6+(k*31)%16)*dpr),dx=((k%2)?1:-1)*amt*dpr*(1+(k%3)*.4);
-    try{if(has3D)g.drawImage(glc,0,sy,glc.width,sh*glc.height/H,dx,sy,Wd,sh)}catch(e){}
-    if(k%3===0){g.fillStyle=k%2?FXT.spk[1]:'#fff';g.fillRect(dx>0?0:Wd+dx,sy,Math.abs(dx),sh)}}
-  g.restore();
-}
 function drawFxB(f){
   const T=Math.floor(f.t*12)/12,p=clamp(T/f.life,0,1),st=Math.min(2,Math.floor(p*3)),C=FXT.spk,TR=FXT.tr,up=f.y>MID?-1:1;
   switch(f.k){
@@ -1060,11 +1050,13 @@ function drawFxB(f){
   case 'burst':{const d=f.s*[.4,.95,1.45][st],sz=snap(f.s*[.42,.3,.14][st],6);
     for(let k=0;k<12;k++){if(st===2&&k%2)continue;const a=f.a0+k*Math.PI/6;bq(f.x+Math.cos(a)*d,f.y+Math.sin(a)*d,Math.max(6,sz),C[k%4])}
     if(st===0)bq(f.x,f.y,snap(f.s*.5,6),'#fff',5);return true}
-  case 'smash':{const w=[44,24,6][st];if(st<2)glitch(f,[26,12][st]);
-    g.save();g.beginPath();g.rect(-40,FY0,FW+80,FL);g.clip();g.translate(f.x,f.y);g.rotate(f.ang||0);
-    g.fillStyle='#000';g.fillRect(-1600,-w/2-5,3200,w+10);g.fillStyle=st===1?C[1]:'#fff';g.fillRect(-1600,-w/2,3200,w);
-    if(st<2){g.fillStyle=C[2];g.fillRect(-1600,w/2+12,3200,6);g.fillRect(-1600,-w/2-18,3200,6)}
-    g.restore();return true}
+  case 'smash':{ // 当たった場所に収まる小さな演出：白いブロック → 青い短い帯と枠 → 細い灰色の帯（画面全体は使わない）
+    const a=f.ang||0;g.save();g.translate(f.x,f.y);g.rotate(a);
+    const bl=[120,90,44][st],bw=[26,14,5][st],bc=st===1?C[1]:st===0?'#fff':C[2];
+    g.fillStyle='#000';g.fillRect(-bl-PR-6,-bw/2-4,bl+8,bw+8);g.fillStyle=bc;g.fillRect(-bl-PR-2,-bw/2,bl,bw); // パックの来た側へ伸びる短い帯
+    g.restore();
+    if(st===0)bq(f.x,f.y,56,'#fff',5);else if(st===1)sqS(f.x,f.y,34,6,'#fff');else sqS(f.x,f.y,48,3,C[2]);
+    return true}
   case 'wallhit':{const h=f.s*[2.6,1.7,.8][st],w=[30,20,10][st];g.save();g.translate(f.x,f.y);g.rotate(Math.atan2(f.ny,f.nx));
     g.fillStyle='#000';g.fillRect(-5,-h/2-5,w+10,h+10);g.fillStyle=st===1?C[1]:'#fff';g.fillRect(0,-h/2,w,h);
     g.fillStyle=C[2];for(let k=-2;k<=2;k++)g.fillRect(w+10,k*h/5-3,6,6);g.restore();return true}

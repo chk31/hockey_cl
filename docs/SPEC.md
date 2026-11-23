@@ -30,7 +30,7 @@
 ## OPTION（テーマ）
 - PUCK：CLASSIC / GOLD / NEON / RUBY / SHADOW
 - FIELD：CLASSIC / SUNSET / JUNGLE / OCEAN / MONO（陣地・レール・マレット・UIの色）
-- FX STYLE：ARCADE / KAWAII / BRUTAL（デジタル・ブルータリズム：角だけ・太い黒枠・ベタ塗り・格子吸着・12コマ/秒のコマ送り。強打のグリッチとゴール時の陣地反転は FX LEVEL が LITE 以下、または端末の「視差効果を減らす」設定で無効）。STYLE が変えるのは全エフェクト・盤面の縁の電飾・パックの軌跡・アイテム選択中のスロー演出・GOAL!! の装飾。アイテム設置のゴースト／残り時間リング／敵陣の斜線／着地点マーク／4秒カウントは全STYLE共通
+- FX STYLE：ARCADE / KAWAII / BRUTAL（デジタル・ブルータリズム：角だけ・太い黒枠・ベタ塗り・格子吸着・12コマ/秒のコマ送り。ゴール時の陣地反転は FX LEVEL が LITE 以下、または端末の「視差効果を減らす」設定で無効。強打は当たった場所に収まる小さなブロック＋短い帯（画面全体は使わない））。STYLE が変えるのは全エフェクト・盤面の縁の電飾・パックの軌跡・アイテム選択中のスロー演出・GOAL!! の装飾。アイテム設置のゴースト／残り時間リング／敵陣の斜線／着地点マーク／4秒カウントは全STYLE共通
 - FX COLOR：ARCADE / NEON / MONO / PASTEL / CANDY / DIGITAL（白 #FFFFFF・青 #0000FF・灰 #8A8883 の3色基調）
 - FX LEVEL：FULL / LITE / MIN
 - 選択は localStorage（キー `ah_theme`）に保存。**テーマは各端末ローカル**（オンラインでも同期しない）。
