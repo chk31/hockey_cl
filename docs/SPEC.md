@@ -30,7 +30,7 @@
 ## OPTION（テーマ）
 - PUCK：CLASSIC / GOLD / NEON / RUBY / SHADOW
 - FIELD：CLASSIC / SUNSET / JUNGLE / OCEAN / MONO（陣地・レール・マレット・UIの色）
-- FX STYLE：ARCADE / KAWAII / WEB90（90年代Web風：Win95の立体ボタンとポップアップ窓、虹色のライン、キラキラGIF、マーチングアンツ、工事中テープ、矢印カーソル。虹・キラキラの色は FX COLOR に従う）。STYLE が変えるのは全エフェクト・盤面の縁の電飾・パックの軌跡・アイテム選択中のスロー演出・GOAL!! の装飾。アイテム設置のゴースト／残り時間リング／敵陣の斜線／着地点マーク／4秒カウントは全STYLE共通
+- FX STYLE：ARCADE / KAWAII / WEB90（90年代Web風を抽象化：立体ボタンの縁〔左上が白・右下が灰〕、点線〔マーチングアンツ〕、細い虹のライン、小さなキラキラだけで表現し、数・大きさ・表示時間を抑えた控えめな演出。虹・キラキラの色は FX COLOR に従う）。STYLE が変えるのは全エフェクト・盤面の縁の電飾・パックの軌跡・アイテム選択中のスロー演出・GOAL!! の装飾。アイテム設置のゴースト／残り時間リング／敵陣の斜線／着地点マーク／4秒カウントは全STYLE共通
 - FX COLOR：ARCADE / NEON / MONO / PASTEL / CANDY / DIGITAL（白 #FFFFFF・青 #0000FF・灰 #8A8883 の3色基調）
 - FX LEVEL：FULL / LITE / MIN
 - 選択は localStorage（キー `ah_theme`）に保存。**テーマは各端末ローカル**（オンラインでも同期しない）。
