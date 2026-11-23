@@ -31,7 +31,7 @@
 - PUCK：CLASSIC / GOLD / NEON / RUBY / SHADOW
 - FIELD：CLASSIC / SUNSET / JUNGLE / OCEAN / MONO（陣地・レール・マレット・UIの色）
 - FX STYLE：ARCADE / KAWAII
-- FX COLOR：ARCADE / NEON / MONO / PASTEL / CANDY
+- FX COLOR：ARCADE / NEON / MONO / PASTEL / CANDY / DIGITAL（白 #FFFFFF・青 #0000FF・灰 #8A8883 の3色基調）
 - FX LEVEL：FULL / LITE / MIN
 - 選択は localStorage（キー `ah_theme`）に保存。**テーマは各端末ローカル**（オンラインでも同期しない）。
 
