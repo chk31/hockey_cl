@@ -419,7 +419,7 @@ const relayOn=()=>NET.role==='host'&&mode==='online'&&NET.open&&!noFwd;
 function relay(m){if(relayOn())NET.fxq.push({m})}
 const ck=c=>c===COL[0]?'@0':c===COL[1]?'@1':c; // 陣地色は各端末のテーマ色で再生する
 const uk=c=>c==='@0'?COL[0]:c==='@1'?COL[1]:c;
-const guestOn=()=>NET.role==='guest'&&mode==='online'&&(state==='play'||state==='goal'||state==='over');
+const guestOn=()=>NET.role==='guest'&&mode==='online'&&(state==='play'||state==='goal'||state==='over'||state==='pause');
 function send(m,fast){m.v=PV;const c=fast&&NET.st&&NET.st.open?NET.st:NET.ev;if(c&&c.open)try{c.send(m)}catch(e){}}
 function setFlip(f){if(viewFlip!==f){viewFlip=f;resize()}}
 function clearMatch(){placed.forEach(drop);placed=[];drags.clear();arm[0]=arm[1]=null;fx.length=0;NET.snaps=[];NET.evq=[];NET.applied=null;NET.myPtr=null;NET.ptrs.clear();ts=1}
@@ -429,10 +429,10 @@ function netReset(){
   for(const c of cs)if(c)try{c.close()}catch(e){}
   if(pr)try{pr.destroy()}catch(e){}
 }
-function netLost(){ // 切断：DISCONNECTED を出してタイトルへ
+function netLost(self){ // 切断：DISCONNECTED を出してタイトルへ（self＝自分でQUITしたときは表示しない）
   if(!NET.role)return;
   try{send({t:'bye'})}catch(e){}
-  netReset();clearMatch();mode='cpu';state='title';setFlip(false);P=[mk(0),mk(1)];NET.disc=3;
+  netReset();clearMatch();mode='cpu';state='title';setFlip(false);P=[mk(0),mk(1)];NET.disc=self?0:3;
   _seq([660,440,330,220],.09,'square',.06);
 }
 function wire(c){
@@ -509,7 +509,7 @@ function hostFlush(){
     const l=NET.fxq.map(r=>{const m=r.m.slice();if(m[0]==='f'){const o=r.o||{},x={};for(const k of ['nx','ny','ang','tx','ty'])if(o[k]!=null)x[k]=o[k];m.push(x)}return [now,...m]});
     NET.fxq=[];send({t:'ev',l});
   }
-  if((state==='play'||state==='goal'||state==='over')&&now-NET.lastSnap>=SNAP_MS){NET.lastSnap=now;send(snapMsg(now),true)}
+  if((state==='play'||state==='goal'||state==='over'||state==='pause')&&now-NET.lastSnap>=SNAP_MS){NET.lastSnap=now;send(snapMsg(now),true)}
 }
 const r1=v=>Math.round(v*10)/10,r3=v=>Math.round(v*1000)/1000;
 function snapMsg(now){
@@ -524,8 +524,9 @@ function snapMsg(now){
 }
 /* ---- ゲスト：入力 ---- */
 function guestDown(id,x,y){
+  if(state==='pause'&&pauseHit(1,x,y)==='quit'){quitGame();return} // QUIT は自分の端末で即切断
   NET.ptrs.set(id,{x,y});send({t:'pd',id,x,y});
-  if(state==='over')return;
+  if(state==='over'||state==='pause')return;
   const l=local(1,x,y);
   if(l.v<=FY1&&y<MID&&!arm[1]&&NET.myPtr==null){NET.myPtr=id;aim(P[1],x,y)} // 自分のマレットは即時に動かす（予測）
 }
@@ -578,7 +579,7 @@ function guestUpdate(dt){
   // 相手のマレットは補間、自分のマレットはローカル即時（ずれが大きいときだけホストへ寄せる）
   const p0=P[0];p0.x=b?a.m[0][0]+(b.m[0][0]-a.m[0][0])*u:a.m[0][0];p0.y=b?a.m[0][1]+(b.m[0][1]-a.m[0][1])*u:a.m[0][1];
   const me=P[1],hm=S[S.length-1].m[1];
-  if(NET.myPtr!=null){
+  if(NET.myPtr!=null&&state!=='pause'){
     const inM=placed.some(it=>it.type==='mud'&&Math.hypot(me.x-it.x,me.y-it.y)<IT.mud.r);
     let dx=me.tx-me.x,dy=me.ty-me.y;const d=Math.hypot(dx,dy),mx=3400*(inM?.4:1)*dt;if(d>mx){dx*=mx/d;dy*=mx/d}
     me.x+=dx;me.y+=dy;
@@ -651,6 +652,31 @@ function drawFS(){if(!fsAvail())return;frame(0,()=>{const {x,y,w,h}=FSB,c=blink(
   for(const [sx,sy] of [[0,0],[1,0],[0,1],[1,1]]){const cx=x+sx*w,cy=y+sy*h;for(const [col,o] of [['#000',2],[c,0]]){g.fillStyle=col;
     g.fillRect(cx-(sx?L:0)-o,cy-(sy?T:0)-o,L+2*o,T+2*o);g.fillRect(cx-(sx?T:0)-o,cy-(sy?L:0)-o,T+2*o,L+2*o)}}})}
 
+/* ---- 中断（PAUSE）：アイテム欄の ‖ → ▶ で再開／QUIT でタイトルへ ---- */
+const PZB={x:118,y:SLOT_Y-22,w:44,h:44},PZ_PLAY={x:120,y:MID+160,w:170,h:110},PZ_QUIT={x:310,y:MID+160,w:170,h:110};
+const mine=i=>mode==='cpu'?i===0:mode==='online'?i===(NET.role==='guest'?1:0):true; // この端末で操作するプレイヤー
+const pzShow=i=>mode==='online'||mode==='2p'||i===0;
+function pauseHit(i,x,y){const l=local(i,x,y);return inR(l,PZ_PLAY)?'play':inR(l,PZ_QUIT)?'quit':null}
+function pauseGame(){if(state!=='play')return;state='pause';drags.clear();arm[0]=arm[1]=null;ts=1;_beep(440,.06);_beep(330,.08,'square',.06,.07)}
+function resumeGame(){if(state!=='pause')return;state='play';_beep(660,.05);_beep(880,.06,'square',.06,.06)}
+function quitGame(){
+  if(mode==='online'){netLost(true)}else{clearMatch();state='title'}
+  _beep(520,.05);
+}
+function drawPause(){
+  g.fillStyle='rgba(0,0,0,.6)';g.fillRect(-40,FY0,FW+80,FL);
+  for(const i of [0,1])if(pzShow(i))frame(i,()=>{
+    pbox(100,MID+100,400,190,COL[i]);if(blink(2))ptext('PAUSE',FW/2,MID+130,14,YEL);
+    pbox(PZ_PLAY.x,PZ_PLAY.y,PZ_PLAY.w,PZ_PLAY.h,'#fff','#1a1a1a');ptext('▶',PZ_PLAY.x+PZ_PLAY.w/2,PZ_PLAY.y+PZ_PLAY.h/2+2,44,'#fff',DOT);
+    pbox(PZ_QUIT.x,PZ_QUIT.y,PZ_QUIT.w,PZ_QUIT.h,'#666','#000');ptext('QUIT',PZ_QUIT.x+PZ_QUIT.w/2,PZ_QUIT.y+PZ_QUIT.h/2+2,16,'#fff');
+  });
+}
+function drawPauseBtn(p){ // ‖ アイコン（文字なし）
+  if(!mine(p.i)||(state!=='play'&&state!=='pause'))return;
+  const {x,y,w,h}=PZB,on=state==='pause';pbox(x,y,w,h,on?YEL:'#666');
+  for(const bx of [x+13,x+25]){g.fillStyle='#000';g.fillRect(bx-2,y+10,10,h-20);g.fillStyle=on?YEL:'#fff';g.fillRect(bx,y+12,6,h-24)}
+}
+
 /* ================= 入力 ================= */
 /* ctl(i)：いま処理している入力でプレイヤー i を操作してよいか
    CPU戦＝1Pのみ／オンライン＝ホスト端末は1P、ゲストから届いた入力（rctx）は2P／同じ端末の2P＝両方 */
@@ -668,9 +694,10 @@ function pdown(id,x,y){
   if(state==='title'){const l=local(0,x,y);if(fsHit(x,y))return;for(const b of BTN){const by=btnY(b);if(l.u>b.x&&l.u<b.x+b.w&&l.v>by&&l.v<by+BH){if(b.m==='opt'){state='options';beep(660,.05)}else if(b.m==='net'){if(window.Peer){state='lobby';LOB.sub='menu';beep(660,.05)}else{beep(150,.12)}}else start(b.m,b.l);return}}return}
   if(state==='options'){optTap(local(0,x,y));return}
   if(state==='over'){if(overT>1.5){if(mode==='online'){toLobby()}else{state='title';placed.forEach(drop);placed=[];beep(660,.06)}}return}
+  if(state==='pause'){const i=y>MID?0:1;if(!pzShow(i)||!ctl(i))return;const h=pauseHit(i,x,y);if(h==='play')resumeGame();else if(h==='quit')quitGame();return}
   for(const i of [0,1]){
     const l=local(i,x,y);
-    if(l.v>FY1){if(!ctl(i))return;const s=slotAt(l.u,l.v);
+    if(l.v>FY1){if(!ctl(i))return;if(inR(l,{x:PZB.x-8,y:PZB.y-8,w:PZB.w+16,h:PZB.h+16})){pauseGame();return}const s=slotAt(l.u,l.v);
       if(s>=0&&P[i].items[s]&&!live){flashSlot(P[i],'#666',.3,s);beep(150,.1,'square',.06);return}
       if(s>=0&&P[i].items[s]){
         if(arm[i]&&arm[i].slot===s){arm[i]=null;slide(600,200,.1,'square',.05);return}
@@ -777,6 +804,7 @@ function update(dt){
   clock+=dt;flash=Math.max(0,flash-dt*4);
   if(guestOn()){guestUpdate(dt);return} // ゲストは物理を回さない
   LOB.err=Math.max(0,LOB.err-dt);NET.disc=Math.max(0,NET.disc-dt);
+  if(state==='pause'){for(const f of fx)f.t+=dt;for(let k=fx.length-1;k>=0;k--)if(fx[k].t>fx[k].life)fx.splice(k,1);return} // 中断中は時間を止める
   for(const i of [0,1])if(arm[i]){const a=arm[i];a.t-=dt;if(P[i].items[a.slot]!==a.type||state!=='play')arm[i]=null;else if(a.t<=0){arm[i]=null;expire(i,a.slot,a.type)}}
   for(const [id,d] of drags){d.t-=dt;if(d.t<=0||state!=='play'){drags.delete(id);if(d.t<=0)expire(d.i,d.slot,d.type)}}
   ts+=((drags.size||arm[0]||arm[1]?.15:1)-ts)*Math.min(1,dt*12);
@@ -1050,6 +1078,7 @@ function tray(p){
     g.fillStyle='#000';g.fillRect(-40,FY1+12,FW+80,TL-FY1+40);
     g.fillStyle=COL[p.i];g.fillRect(-40,FY1+12,FW+80,6);g.fillStyle=DEEP[p.i];g.fillRect(-40,FY1+22,FW+80,3);
     ptext(String(p.score).padStart(2,'0'),24,FY1+60,40,COL[p.i],PIX,'left');
+    drawPauseBtn(p);
     for(let s=0;s<3;s++){
       const x=slotX(s),dragging=[...drags.values()].some(d=>d.i===p.i&&d.slot===s),k=p.items[s];
       const armed=arm[p.i]&&arm[p.i].slot===s,fl=p.fl>0&&(p.fls<0||p.fls===s)&&blink(12);
@@ -1144,6 +1173,7 @@ function drawUI(){
     drawFS();
     if(NET.disc>0&&blink(3))frame(0,()=>ptext('DISCONNECTED',FW/2,TY0-36,18,'#ff0055'));
   }else if(state==='lobby'){drawLobby();
+  }else if(state==='pause'){drawPause();
   }else if(state==='options'){drawOptions();
   }else if(state==='goal'){
     for(const i of [0,1])frame(i,()=>{if(i===lastScorer){const RBW=FXT.tr;const sc=1+Math.max(0,goalT-1.8)*2.5;g.save();g.translate(FW/2,MID+190+Math.sin(clock*12)*6);g.scale(sc,sc);ptext('GOAL!!',0,0,64,RBW[Math.floor(clock*16)%6]);if(kawaii())for(let k=0;k<6;k++){const a=clock*3+k*1.047;ks(k%2?'heart':'star',Math.cos(a)*190,Math.sin(a)*60,22,RBW[k])}g.restore()}});
