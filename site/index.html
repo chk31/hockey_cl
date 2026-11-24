@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.23">
+<meta name="version" content="1.24">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.23'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.24'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=200,PR=26,MR=40,MAXV=2100,WIN=7;
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -1218,6 +1218,18 @@ function drawImpactA(f){
   g.save();g.imageSmoothingEnabled=false;g.translate(f.x,f.y);
   if(f.nx!=null){g.translate(f.nx*size*.22,f.ny*size*.22);g.rotate(Math.atan2(f.ny,f.nx));g.scale(.65,1)} // 壁：壁から内側へ向けて平たく
   g.drawImage(sh,fr*IMP.sz,0,IMP.sz,IMP.sz,-size/2,-size/2,size,size);g.restore();return true}
+/* パレット番号で保存したドット絵（tools/*_gen.py）の読み込みと着色 */
+function loadIdx(src,div){const o={idx:null,w:0,h:0,cache:{}},im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=im.width;c.height=im.height;const q=c.getContext('2d');q.drawImage(im,0,0);
+  const d=q.getImageData(0,0,im.width,im.height).data,a=new Uint8Array(im.width*im.height);for(let k=0;k<a.length;k++)a[k]=d[k*4+3]?Math.round(d[k*4]/div):0;o.idx=a;o.w=im.width;o.h=im.height};im.src=src;return o}
+function idxSheet(o,pal){const key=pal.join();if(o.cache[key])return o.cache[key];const c=document.createElement('canvas');c.width=o.w;c.height=o.h;const q=c.getContext('2d');
+  for(let y=0;y<o.h;y++)for(let x=0;x<o.w;x++){const i=o.idx[y*o.w+x];if(i&&pal[i-1]){q.fillStyle=pal[i-1];q.fillRect(x,y,1,1)}}return o.cache[key]=c}
+/* SMASH：スタイルごとのドット絵（tools/smash_gen.py、7コマ×8方向）。打った方向に一番近い向きの絵を使う
+   パレット番号 1-4=spk 5=黒 6-11=tr（虹） 12=打った側の色 13=白 14=灰 */
+const SMX={arcade:loadIdx('fx/smash_arcade.png',16),kawaii:loadIdx('fx/smash_kawaii.png',16),web90:loadIdx('fx/smash_web90.png',16)};
+function drawSmashS(f){const sp=SMX[kawaii()?'kawaii':web90()?'web90':'arcade'];if(!sp.idx)return false;
+  const S0=FXT.spk,T=FXT.tr,sh=idxSheet(sp,[S0[0],S0[1],S0[2],S0[3],'#000',T[0],T[1],T[2],T[3],T[4],T[5],f.col||COL[0],'#fff','#808080']);
+  const fs=sp.h/8,n=Math.round(sp.w/fs),fr=Math.min(n-1,Math.floor(f.t/f.life*n)),dir=((Math.round((f.ang||0)/(Math.PI/4))%8)+8)%8,size=210;
+  g.save();g.imageSmoothingEnabled=false;g.drawImage(sh,fr*fs,dir*fs,fs,fs,f.x-size/2,f.y-size/2,size,size);g.restore();return true}
 /* 8種 → 各スタイルの描画（既存の形を再利用）への対応 */
 function fxViews(f){const v=o=>Object.assign(Object.create(f),o);
   switch(f.k){
@@ -1231,6 +1243,7 @@ function fxViews(f){const v=o=>Object.assign(Object.create(f),o);
 function drawFx(f){
   if(f.k==='stop'){drawStop(f);return}
   if(f.k==='impact'&&!kawaii()&&!web90()&&drawImpactA(f))return;
+  if(f.k==='smash'&&drawSmashS(f))return;
   for(const w of fxViews(f)){if(kawaii()&&drawFxK(w))continue;if(web90()&&drawFxW(w))continue;drawFxA(w)}
 }
 function drawFxA(f){

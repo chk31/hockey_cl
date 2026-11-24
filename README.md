@@ -19,7 +19,7 @@
 3. ホームへのスワイプを止めたいときは アクセスガイド（設定 → アクセシビリティ）。
 
 ## バージョン
-- タイトル画面のメニュー枠の右下に `v1.23` のように表示（`site/index.html` の `VER`）。更新のたびに上げる。
+- タイトル画面のメニュー枠の右下に `v1.24` のように表示（`site/index.html` の `VER`）。更新のたびに上げる。
 - 公開ページが最新か迷ったら、この番号で確認する。
 
 ## 実装メモ
@@ -47,6 +47,7 @@ STUN（Google）のみ設定済み。モバイル回線や企業Wi-Fiなど対�
 - ここで変えた設定は確認用で、`<` で抜けると元に戻る。
 
 ## ツール
+- `tools/smash_gen.py`：SMASH（強打）のドット絵アニメを FX STYLE ごと（ARCADE／KAWAII／WEB90）に生成。7コマ×8方向をそれぞれ描き分け、色はパレット番号で `site/fx/smash_*.png` に保存（FX COLOR・虹色・打った側の色で着色）。
 - `tools/impact_gen.py`：ARCADE の IMPACT（打撃の弾け）のドット絵アニメ（6コマ）を生成。色はパレット番号で `site/fx/impact_idx.png` に保存し、ゲーム側で FX COLOR に合わせて着色する。
 - `tools/aura_gen.py`：スーパーシュートの青いオーラ（燃え立つ炎の輪）のドット絵連番を生成。`python3 tools/aura_gen.py [--preview DIR]` で `site/fx/aura_mallet.png`・`aura_puck.png`（各8コマ）を書き出す（Pillow が必要）。
 

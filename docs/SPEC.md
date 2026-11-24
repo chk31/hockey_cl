@@ -50,6 +50,7 @@
 | spawn | アイテムボックス出現 | ボックス出現 |
 | fly | 取ったアイテムが欄へ飛ぶ | アイテム取得 |
 
+- smash は FX STYLE ごとのドット絵アニメ（`tools/smash_gen.py`、7コマ×8方向）。ARCADE＝ギザギザの爆発星と速度線、KAWAII＝つや付きの星とハート、WEB90＝立体ボタンの縁と細い虹。
 - ARCADE の impact は `tools/impact_gen.py` で作ったドット絵アニメ（6コマ）。色はパレット番号で持ち、FX COLOR で着色。
 - 擬音（文字のエフェクト）は廃止。
 - LITE：speed・spawn・ぬかるみの泡/しずく・小さな火花は出さない。MIN：fly とヒットストップの点だけ。
