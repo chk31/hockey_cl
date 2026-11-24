@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.18">
+<meta name="version" content="1.19">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.18'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.19'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=200,PR=26,MR=40,MAXV=2100,WIN=7;
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -831,7 +831,7 @@ function sub(h,ms){
       if(d<MR+PR&&d>0){
         const nx=dx/d,ny=dy/d;puck.x=m.x+nx*(MR+PR);puck.y=m.y+ny*(MR+PR);
         const rv=(puck.vx-m.vx)*nx+(puck.vy-m.vy)*ny;
-        if(rv<0){puck.vx-=1.85*rv*nx;puck.vy-=1.85*rv*ny;hit(m.x+nx*MR,m.y+ny*MR,-rv,'',m.i);if(-rv>250){if(lastHitter!==m.i&&lastHitter>=0){rally++;rallyPop=.4;if(rally%5===0){addFx('confetti',FW/2,MID,.6,'',COL[m.i]);seq([1047,1319,1568],.05)}}lastHitter=m.i}}
+        if(rv<0){puck.vx-=1.85*rv*nx;puck.vy-=1.85*rv*ny;hit(m.x+nx*MR,m.y+ny*MR,-rv,'',m.i);if(-rv>250){if(lastHitter!==m.i&&lastHitter>=0){rally++;rallyPop=.4;if(rally%5===0){seq([1047,1319,1568],.05)}}lastHitter=m.i}}
       }
     }
     let mud=false;
