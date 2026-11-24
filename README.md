@@ -19,7 +19,7 @@
 3. ホームへのスワイプを止めたいときは アクセスガイド（設定 → アクセシビリティ）。
 
 ## バージョン
-- タイトル画面のメニュー枠の右下に `v1.26` のように表示（`site/index.html` の `VER`）。更新のたびに上げる。
+- タイトル画面のメニュー枠の右下に `v1.27` のように表示（`site/index.html` の `VER`）。更新のたびに上げる。
 - 公開ページが最新か迷ったら、この番号で確認する。
 
 ## 実装メモ
@@ -31,7 +31,8 @@
 
 ### TURN（別回線でつながらない場合）
 片方がモバイル回線などで直接つながらないときは、TURN サーバーで中継する。Metered.ca（無料枠あり）を使う。
-- `site/index.html` の `TURN_CFG` に、Metered のアプリ名（`xxx.metered.live` の `xxx`）と TURN 認証情報 API のキーを書く。
+- 現在は Metered の固定の認証情報（`TURN_STATIC`：`global.relay.metered.ca` の UDP/TCP 80・443、TLS 443）を直接使っている。
+- 代わりに `site/index.html` の `TURN_CFG` に、Metered のアプリ名（`xxx.metered.live` の `xxx`）と TURN 認証情報 API のキーを書く。
   キーはサイトに公開される種類のもの。空なら STUN だけ（直接つながる場合のみ）。
 - 接続前に Metered から中継サーバーの情報を取得し、STUN に加えて使う。取得に失敗しても STUN だけで続ける。
 - 中継でつながっているときは、右下の RTT の数字の後ろに `R` が付く。診断表示（タイトルの AIR HOCKEY を長押し）にも `turn` と `path` が出る。
