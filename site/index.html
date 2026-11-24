@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.22">
+<meta name="version" content="1.23">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.22'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.23'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=200,PR=26,MR=40,MAXV=2100,WIN=7;
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -297,23 +297,33 @@ function seq(...a){relay(['s','seq',a]);if(!rctx)_seq(...a)}
 function slide(...a){relay(['s','slide',a]);if(!rctx)_slide(...a)}
 
 /* ================= エフェクト ================= */
-const LITE_SKIP={lines:1,confetti:1,sparks:1,bubble:1,drop:1,rise:1,beam:1,text:1,splash:1};
+/* エフェクトは8種類だけ（どのスタイルもこの8種を描けばよい）
+   impact : 当たった点で弾ける。f.nx/ny があれば壁向き、s<24 は小さな火花
+   wave   : 広がる輪郭（衝撃波・設置・着地など）
+   smash  : 強打
+   speed  : 向きのある流線。f.nx/ny が向き（無ければパックの進行方向）
+   mud    : ぬかるみ。txt で 'in'（入る）/'out'（出る）/'bub'（泡）/'drop'（しずく）
+   goal   : ゴール演出（大きな演出＋紙吹雪）
+   spawn  : アイテムボックス出現
+   fly    : 取ったアイテムが欄へ飛ぶ（txt＝アイテム種類） */
+const FX_LIFE={impact:.45,wave:.5,smash:.6,speed:.4,mud:.6,goal:2.2,spawn:.7,fly:.5};
+const MUD_LIFE={in:.6,out:.6,bub:.7,drop:1.4};
 function addFx(k,x,y,s=1,txt='',col=YEL){
   const o=addFx0(k,x,y,s,txt,col);
-  if(k==='text'||!relayOn())return o;
+  if(!relayOn())return o;
   const r={o:o||{},m:['f',k,x,y,s,txt,ck(col)]};NET.fxq.push(r);return r.o; // 後から付く nx/ny/ang/tx/ty は送信時に拾う
 }
 function addFx0(k,x,y,s=1,txt='',col=YEL){
-  if(k==='text')return null; // 文字のエフェクト（擬音）は全モードで出さない
   if(k==='stop'&&!minimal())return null; // ヒットストップの合図は MIN 専用
-  if(minimal()&&k!=='fly'&&k!=='stop')return null; // 最低限モード：アイテムが欄に飛ぶ表示とヒットストップの合図だけ残す
-  if(k==='text'&&kawaii())txt=KTXT[txt]||txt;
-  if(lite()){if(LITE_SKIP[k])return;if(k==='burst'&&fx.filter(f=>f.k==='burst').length>=2)return;if(k==='burst'||k==='shock'||k==='ring')s*=.6}
+  if(minimal()&&k!=='fly'&&k!=='stop')return null; // MIN：アイテムが欄に飛ぶ表示とヒットストップの合図だけ
+  if(lite()){ // LITE：流線・出現・ぬかるみの泡やしずく・小さな火花は出さない。弾け・輪は小さく、弾けは同時2つまで
+    if(k==='speed'||k==='spawn'||(k==='mud'&&txt!=='in')||(k==='impact'&&s<24))return null;
+    if(k==='impact'&&fx.filter(f=>f.k==='impact').length>=2)return null;if(k==='impact'||k==='wave')s*=.6}
   if(fx.length>90)fx.shift();
-  const o={k,x,y,s,txt,col,t:0,a0:Math.random()*6,life:{wallhit:.4,smash:.6,text:.8,ring:.5,big:1.6,burst:.4,shock:.4,lines:.35,sparks:.4,confetti:2.2,beam:.7,fly:.5,splash:.6,bubble:.7,drop:1.4,rise:.6}[k],i:y>MID?0:1};fx.push(o);
+  const o={k,x,y,s,txt,col,t:0,a0:Math.random()*6,life:k==='mud'?(MUD_LIFE[txt]||.6):FX_LIFE[k],i:y>MID?0:1};fx.push(o);
   if(k==='stop')o.life=s+.22; // ヒットストップの長さ＋少しの余韻
-  if(web90()&&k!=='fly'&&k!=='big'&&k!=='stop')o.life*=.75; // WEB90 は短めに
-  if(kawaii()){const L={wallhit:1.4,smash:1.5,burst:1.7,text:1.4,shock:1.4,ring:1.4,splash:1.6,big:1.25,confetti:1.3,sparks:1.5,bubble:1.3,beam:1.2,rise:1.4,lines:1.6}[k];if(L)o.life*=L}
+  if(web90()&&k!=='fly'&&k!=='goal'&&k!=='stop')o.life*=.75; // WEB90 は短めに
+  if(kawaii()){const L={impact:1.7,wave:1.4,smash:1.5,speed:1.6,mud:1.6,goal:1.25,spawn:1.2}[k];if(L)o.life*=L}
   return o;
 }
 let lastHit=0;
@@ -323,13 +333,11 @@ const SMASH=1850; // スマッシュ判定の相対速度（旧 1600）。最高
 function hit(x,y,sp,txt,who=-1,wn=null){
   const t=performance.now();if(t-lastHit<60)return;lastHit=t;
   beep(220+Math.min(sp,2000)*.3,.045,'square',.07);
-  if(wn){if(sp>150){const f=addFx('wallhit',x,y,clamp(sp/18,34,100));if(f){f.nx=wn[0];f.ny=wn[1]}}if(sp>1000)juice(6,.03,.4,.06);return}
-  if(sp>SMASH&&who>=0){juice(18,.09,1,.35,COL[who]);noise(.25,.12);const f=addFx('smash',x,y,1,'',COL[who]);if(f)f.ang=Math.atan2(puck.vy,puck.vx);addFx('text',x,y,1.5,'スマッシュ!!',YEL);return}
-  if(sp>150)addFx('burst',x,y,clamp(sp/18,26,110));
-  if(sp>500)addFx('shock',x,y,clamp(sp/12,40,160),'',who>=0?COL[who]:'#fff');
+  if(wn){if(sp>150){const f=addFx('impact',x,y,clamp(sp/18,34,100),'','');if(f){f.nx=wn[0];f.ny=wn[1]}}if(sp>1000)juice(6,.03,.4,.06);return}
+  if(sp>SMASH&&who>=0){juice(18,.09,1,.35,COL[who]);noise(.25,.12);const f=addFx('smash',x,y,1,'',COL[who]);if(f)f.ang=Math.atan2(puck.vy,puck.vx);return}
+  if(sp>150)addFx('impact',x,y,clamp(sp/18,26,110),'','');
+  if(sp>1000)addFx('wave',x,y,clamp(sp/12,40,160),'',who>=0?COL[who]:'#fff'); // 強い打撃だけ輪を重ねる
   if(sp>1000)juice(9,.05,.6,.12,who>=0?COL[who]:'#ffffff');
-  if(txt)addFx('text',x,y,1.1,txt);
-  if(who<0&&sp>400)addFx('sparks',x,y,sp/1000);
 }
 
 /* ================= 進行 ================= */
@@ -337,8 +345,8 @@ let live=false; // サーブ後、パックが一度動くまでアイテム関�
 const HOLD=4;
 function explode(side){
   const x=puck.x,y=puck.y;puck.boom=true;puck.vx=puck.vy=0;
-  for(let k=0;k<5;k++)setTimeout(()=>{addFx('burst',x+rnd(-60,60),y+rnd(-60,60),rnd(70,120));noise(.2,.12)},k*90);
-  addFx('shock',x,y,220,'','#ff0055');addFx('ring',x,y,200,'',YEL);addFx('splash',x,y,2);addFx('text',x,y,1.6,'ドカーン!','#ff0055');
+  for(let k=0;k<5;k++)setTimeout(()=>{addFx('impact',x+rnd(-60,60),y+rnd(-60,60),rnd(70,120),'','');noise(.2,.12)},k*90);
+  addFx('wave',x,y,220,'','#ff0055');
   juice(34,.2,1.6,1,'#ff0055');noise(.8,.25);slide(400,40,.6,'sawtooth',.1);
   goal(1-side);
 }
@@ -349,14 +357,14 @@ const AURA='#33ccff',SUP_SP=2600,SUP_AIM=2.5,STUN=1.5;
 let SUP={aim:-1,t:0,dx:0,dy:-1};
 function superOn(i,slot){const p=P[i];if(p.items[slot]!=='super')return;
   if(p.pw){flashSlot(p,'#666',.3,slot);beep(150,.1,'square',.06);return} // もう強化中
-  p.items.splice(slot,1);p.pw=true;addFx('ring',p.x,p.y,110,'',AURA);addFx('shock',p.x,p.y,80,'',AURA);seq([523,784,1047,1568],.05,'square',.06)}
+  p.items.splice(slot,1);p.pw=true;addFx('wave',p.x,p.y,110,'',AURA);seq([523,784,1047,1568],.05,'square',.06)}
 function superTrigger(i){SUP.aim=i;SUP.t=SUP_AIM;SUP.dx=0;SUP.dy=fwd(i);puck.vx=puck.vy=0;puck.sup=-1;
-  addFx('shock',puck.x,puck.y,130,'',AURA);juice(8,0,.6,.15,AURA);slide(300,1200,.25,'square',.07)}
+  addFx('wave',puck.x,puck.y,130,'',AURA);juice(8,0,.6,.15,AURA);slide(300,1200,.25,'square',.07)}
 function superAimDir(i){const p=P[i];if(p.ptr==null||p.fx==null)return null;const dx=puck.x-p.fx,dy=puck.y-p.fy,d=Math.hypot(dx,dy);return d<20?null:{dx:dx/d,dy:dy/d}} // 指からパックへの向き＝引っ張りの逆
 function superFire(){const i=SUP.aim;if(i<0)return;const a=superAimDir(i)||{dx:SUP.dx,dy:SUP.dy};SUP.aim=-1;P[i].pw=false;
   puck.vx=a.dx*SUP_SP;puck.vy=a.dy*SUP_SP;puck.boostT=.9;puck.sup=i;puck.supT=2.5;puck.land=0;
-  addFx('lines',puck.x,puck.y,1);addFx('burst',puck.x,puck.y,90);juice(14,.06,.9,.25,AURA);slide(500,2000,.18,'sawtooth',.07);noise(.2,.1)}
-function stunP(i){const p=P[i];p.stun=STUN;addFx('shock',p.x,p.y,100,'',AURA);addFx('burst',p.x,p.y,80);juice(10,.05,.6,.2,AURA);noise(.3,.12);seq([400,300,200],.06,'square',.06)}
+  addFx('speed',puck.x,puck.y,1);addFx('impact',puck.x,puck.y,90,'',AURA);juice(14,.06,.9,.25,AURA);slide(500,2000,.18,'sawtooth',.07);noise(.2,.1)}
+function stunP(i){const p=P[i];p.stun=STUN;addFx('impact',p.x,p.y,80,'',AURA);addFx('wave',p.x,p.y,100,'',AURA);juice(10,.05,.6,.2,AURA);noise(.3,.12);seq([400,300,200],.06,'square',.06)}
 function superClear(){for(const p of P){p.pw=false;p.stun=0}SUP.aim=-1;puck.sup=-1}
 function serve(side){live=false;puck.boom=false;puck.sup=-1;puck.hold=0;puck.side=side;puck.x=FW/2;puck.y=side===0?MID+170:MID-170;puck.vx=puck.vy=0;puck.air=0;puck.trail=[]}
 function start(m,l){
@@ -368,18 +376,18 @@ function start(m,l){
 function goal(scorer){
   superClear(); // 点が入ったら強化・スタン・構えを解除
   P[scorer].score++;lastScorer=scorer;goalT=2.2;state='goal';flash=0;juice(30,.15,1.5,1,COL[scorer]);railFlash=2;noise(.6,.2);
-  const gy=scorer===0?FY0:FY1;addFx('big',FW/2,gy,1,'',COL[scorer]);addFx('confetti',FW/2,MID,1,'',COL[scorer]);
-  for(let k=0;k<6;k++)setTimeout(()=>{addFx('burst',FW/2+rnd(-200,200),gy+(scorer===0?1:-1)*rnd(20,300),rnd(60,110));noise(.15,.08)},k*120);
+  const gy=scorer===0?FY0:FY1;addFx('goal',FW/2,gy,1,'',COL[scorer]);
+  for(let k=0;k<6;k++)setTimeout(()=>{addFx('impact',FW/2+rnd(-200,200),gy+(scorer===0?1:-1)*rnd(20,300),rnd(60,110),'','');noise(.15,.08)},k*120);
   rally=0;lastHitter=-1;
   seq([784,988,1175,1568,1568,0,1568],.07,'square',.07);
   if(P[scorer].score>=WIN){state='over';overT=0;setTimeout(()=>seq([1047,0,988,0,1047,1319,1568,0,2093],.1,'square',.07),600)}
 }
-function spawnBox(p){const b=p.box;b.on=true;b.spin=0;b.x=rnd(80,FW-80);const y=rnd(MID+100,FY1-230);b.y=p.i===0?y:TL-y;seq([1319,1568],.05,'square',.04);addFx('beam',b.x,b.y,1,'',COL[p.i])}
+function spawnBox(p){const b=p.box;b.on=true;b.spin=0;b.x=rnd(80,FW-80);const y=rnd(MID+100,FY1-230);b.y=p.i===0?y:TL-y;seq([1319,1568],.05,'square',.04);addFx('spawn',b.x,b.y,1,'',COL[p.i])}
 function give(p){
-  const b=p.box;b.on=false;b.cd=10;addFx('ring',b.x,b.y,90,'',COL[p.i]);
+  const b=p.box;b.on=false;b.cd=10;addFx('wave',b.x,b.y,90,'',COL[p.i]);
   if(p.items.length>=3){flashSlot(p,'#ff0055',.7);seq([300,200],.08);return}
   const k=KEYS[Math.floor(Math.random()*KEYS.length)];p.items.push(k);setTimeout(()=>flashSlot(p,YEL,.5,p.items.indexOf(k)),480);
-  const sl=local(p.i,slotX(p.items.length-1),SLOT_Y);const fl=addFx('fly',b.x,b.y,1,k,COL[p.i]);if(fl){fl.tx=sl.u;fl.ty=sl.v}addFx('burst',b.x,b.y,90);juice(6,0,.4,0);
+  const sl=local(p.i,slotX(p.items.length-1),SLOT_Y);const fl=addFx('fly',b.x,b.y,1,k,COL[p.i]);if(fl){fl.tx=sl.u;fl.ty=sl.v}juice(6,0,.4,0);
   seq([988,1319],.07,'square',.07);
 }
 /* 加速床の向き：相手ゴール中央へ（真正面から最大±30°） */
@@ -394,7 +402,7 @@ function place(d){
   p.items.splice(d.slot,1);
   const gp=ghost(d);placed.push(Object.assign({id:++pid,type:d.type,x:gp.x,y:gp.y,o:d.i,age:0,life:9.6,hit:0,mesh:null},d.type==='boost'?boostDir(d.i,gp.x,gp.y):{}));
   const mine=placed.filter(q=>q.o===d.i);if(mine.length>3){drop(mine[0]);placed.splice(placed.indexOf(mine[0]),1)}
-  setTimeout(()=>{addFx('ring',gp.x,gp.y,IT[d.type].r+60,'',IT[d.type].c);addFx('shock',gp.x,gp.y,IT[d.type].r+50,'',IT[d.type].c);juice(8,0,.5,0);noise(.12,.1)},200);
+  setTimeout(()=>{addFx('wave',gp.x,gp.y,IT[d.type].r+60,'',IT[d.type].c);juice(8,0,.5,0);noise(.12,.1)},200);
   slide(400,80,.15,'square',.08);
 }
 
@@ -458,7 +466,7 @@ const PEER_CONFIG={debug:1,config:{iceServers:[
   // 別回線でつながらないときは TURN を追加：{urls:'turn:turn.example.com:3478',username:'USER',credential:'PASS'}
 ]}};
 try{const q=new URLSearchParams(location.search).get('ps');if(q){const [h,pt]=q.split(':');Object.assign(PEER_CONFIG,{host:h,port:+pt||9000,path:'/',secure:false})}}catch(e){} // 開発用：?ps=localhost:9000 で自前のPeerServer
-const PV=1,PREFIX='aihockey-',DMIN=25,DMAX=120,SNAP_MS=15,TIMEOUT=3000;
+const PV=2,PREFIX='aihockey-',DMIN=25,DMAX=120,SNAP_MS=15,TIMEOUT=3000;
 let viewFlip=false,noFwd=false,rctx=false;
 const NET={role:null,peer:null,ev:null,st:null,gp:null,open:false,code:'',fxq:[],evq:[],snaps:[],applied:null,off:null,lastRx:0,lastSnap:0,lastPing:0,rtt:-1,ptrs:new Map(),myPtr:null,dly:60,jit:10,gap:17,lastHt:0,seq:0,rseq:new Map(),disc:0,cto:0};
 const LOB={sub:'menu',input:'',err:0,busy:false};
@@ -477,7 +485,8 @@ function netReset(){
   for(const c of cs)if(c)try{c.close()}catch(e){}
   if(pr)try{pr.destroy()}catch(e){}
 }
-function netLost(self){ // 切断：DISCONNECTED を出してタイトルへ（self＝自分でQUITしたときは表示しない）
+function verMismatch(){netLost();NET.disc=4;NET.discMsg='VERSION MISMATCH'}
+function netLost(self){NET.discMsg=''; // 切断：DISCONNECTED を出してタイトルへ（self＝自分でQUITしたときは表示しない）
   if(!NET.role)return;
   try{send({t:'bye'})}catch(e){}
   netReset();clearMatch();mode='cpu';state='title';setFlip(false);P=[mk(0),mk(1)];NET.disc=self?0:3;
@@ -522,7 +531,8 @@ function toLobby(){ // 試合後：両者ロビー（再戦待ち）へ
 }
 /* ---- 受信 ---- */
 function rx(d){
-  if(!d||d.v!==PV)return;NET.lastRx=hnow();
+  if(!d)return;if(d.v!==PV){if(NET.role)verMismatch();return} // 相手が別の版 → 切断して知らせる
+  NET.lastRx=hnow();
   switch(d.t){
   case 'ping':send({t:'pong',ts:d.ts});return;
   case 'pong':{const r=hnow()-d.ts;NET.rtt=NET.rtt<0?r:NET.rtt*.7+r*.3;return}
@@ -755,21 +765,27 @@ function drawPauseBtn(p){ // ‖ アイコン（文字なし）
 /* ================= 開発者画面（DEV）：FX STYLE × FX COLOR × FX LEVEL ごとのエフェクトの見え方を確認 =================
    OPTION の文字を2回連続タップで入る。上半分の盤面にエフェクトを出し、下半分のパネルで切り替える。抜けると元の設定に戻す */
 const DEV={saved:null,last:'burst',loop:false,loopT:0,move:true,fast:false,slow:false,aura:false,stun:false,goal:false,a:0};
-const DEV_FX=['burst','smash','wallhit','shock','ring','sparks','lines','confetti','big','beam','fly','splash','bubble','drop','rise','stop'];
+const DEV_FX=['impact','imp-wall','imp-tiny','wave','smash','speed','mud-in','mud-out','mud-bub','mud-drop','goal','spawn','fly','stop'];
 const DEV_TG=['ALL','LOOP','MOVE','FAST','SLOW','AURA','STUN','GOAL'];
 const DEV_ROWS=[['st','FX STYLE'],['fx','FX COLOR'],['lv','FX LEVEL']],devRowY=k=>MID+62+k*46,DEV_GY=MID+206,devCell=k=>({x:30+(k%4)*135+4,y:DEV_GY+Math.floor(k/4)*48+3,w:127,h:42});
 function enterDev(){DEV.saved=Object.assign({},TH);state='dev';fx.length=0;Object.assign(DEV,{loop:false,slow:false,aura:false,stun:false,goal:false,move:true,fast:false});P=[mk(0),mk(1)];beep(1320,.06);beep(1760,.06,'square',.06,.07)}
 function exitDev(){Object.assign(TH,DEV.saved||TH);applyTheme();fx.length=0;drags.delete('dev');P=[mk(0),mk(1)];puck.sup=-1;Object.assign(puck,{x:FW/2,y:MID,vx:0,vy:0,trail:[]});ts=1;state='options';beep(660,.05)}
 function devFire(k){
-  const X=[120,240,360,480],Y=[260,360,460,560],c0=COL[0],c1=COL[1];
+  const X=[120,240,360,480],Y=[250,340,430,520],c0=COL[0],c1=COL[1];
   const at=(k,x,y)=>{switch(k){
-    case 'burst':addFx('burst',x,y,90);break;case 'smash':{const f=addFx('smash',x,y,1,'',c0);if(f)f.ang=-.9;break}
-    case 'wallhit':{const f=addFx('wallhit',FW,y,80);if(f){f.nx=-1;f.ny=0}break}case 'shock':addFx('shock',x,y,120,'',c0);break;
-    case 'ring':addFx('ring',x,y,110,'',c1);break;case 'sparks':addFx('sparks',x,y,.8);break;case 'lines':addFx('lines',puck.x,puck.y,1);break;
-    case 'confetti':addFx('confetti',FW/2,MID,1,'',c1);break;case 'big':addFx('big',FW/2,FY0,1,'',c1);break;case 'beam':addFx('beam',x,y,1,'',c1);break;
+    case 'impact':addFx('impact',x,y,80,'','');break;
+    case 'imp-wall':{const f=addFx('impact',FW,y,80,'','');if(f){f.nx=-1;f.ny=0}break}
+    case 'imp-tiny':for(let n=0;n<4;n++)addFx('impact',x+rnd(-40,40),y+rnd(-30,30),8,'','');break;
+    case 'wave':addFx('wave',x,y,120,'',c0);break;
+    case 'smash':{const f=addFx('smash',x,y,1,'',c0);if(f)f.ang=-.9;break}
+    case 'speed':{const f=addFx('speed',x,y,1);if(f){f.nx=.5;f.ny=-.87}break}
+    case 'mud-in':addFx('mud',x,y,1,'in');break;case 'mud-out':addFx('mud',x,y,.6,'out');break;
+    case 'mud-bub':for(let n=0;n<4;n++)addFx('mud',x+rnd(-40,40),y+rnd(-40,40),1,'bub');break;
+    case 'mud-drop':for(let n=0;n<5;n++)addFx('mud',x+rnd(-10,10),y+n*10,1,'drop');break;
+    case 'goal':addFx('goal',FW/2,FY0,1,'',c1);break;
+    case 'spawn':addFx('spawn',x,y,1,'',c1);break;
     case 'fly':{const f=addFx('fly',x,y,1,'jump',c1),sl=local(1,slotX(0),SLOT_Y);if(f){f.tx=sl.u;f.ty=sl.v}break}
-    case 'splash':addFx('splash',x,y,1);break;case 'bubble':addFx('bubble',x,y,1);break;case 'drop':addFx('drop',x,y,1);break;
-    case 'rise':addFx('rise',x,y,1);break;case 'stop':stopCue(.09,c0);break}}; // stop は FX LEVEL が MIN のときだけ見える
+    case 'stop':stopCue(.09,c0);break}}; // stop は FX LEVEL が MIN のときだけ見える
   if(k==='ALL'){DEV_FX.forEach((q,n)=>at(q,X[n%4],Y[Math.floor(n/4)]))}else at(k,FW/2,380);
 }
 function devUpdate(dt){
@@ -887,11 +903,11 @@ function bounceOff(px,py,r,e){
 function wall(x,y,sp){hit(x,y,sp,'',-1,x<=0?[1,0]:x>=FW?[-1,0]:y<=FY0?[0,1]:[0,-1])}
 function bumperHit(it,r){
   const v=bounceOff(it.x,it.y,r,1.25);
-  if(v){const sp=Math.hypot(puck.vx,puck.vy);if(sp<1){const nx=(puck.x-it.x)/(r+PR),ny=(puck.y-it.y)/(r+PR);puck.vx=nx*600;puck.vy=ny*600}else if(sp<600){puck.vx*=600/sp;puck.vy*=600/sp}it.hit=.25;seq([1568,2093],.04,'square',.06);hit(puck.x,puck.y,Math.max(v,500),'ボヨン');juice(10,.04,.8,.15,'#aa55ff');addFx('shock',it.x,it.y,80,'','#aa55ff')}
+  if(v){const sp=Math.hypot(puck.vx,puck.vy);if(sp<1){const nx=(puck.x-it.x)/(r+PR),ny=(puck.y-it.y)/(r+PR);puck.vx=nx*600;puck.vy=ny*600}else if(sp<600){puck.vx*=600/sp;puck.vy*=600/sp}it.hit=.25;seq([1568,2093],.04,'square',.06);hit(puck.x,puck.y,Math.max(v,500),'');juice(10,.04,.8,.15,'#aa55ff');addFx('wave',it.x,it.y,80,'','#aa55ff')}
 }
 function sub(h,ms){
   puck.x+=puck.vx*h;puck.y+=puck.vy*h;
-  if(puck.air>0){puck.air-=h;if(puck.air<=0){puck.air=0;puck.land=.25;slide(160,50,.25,'square',.1);juice(16,.06,.8,.2,YEL);noise(.2,.1);addFx('ring',puck.x,puck.y,120,'',YEL);addFx('ring',puck.x,puck.y,70,'','#fff');addFx('burst',puck.x,puck.y,60);addFx('text',puck.x,puck.y,1.2,'ドスン!','#fff')}}
+  if(puck.air>0){puck.air-=h;if(puck.air<=0){puck.air=0;puck.land=.25;slide(160,50,.25,'square',.1);juice(16,.06,.8,.2,YEL);noise(.2,.1);addFx('wave',puck.x,puck.y,120,'',YEL);addFx('impact',puck.x,puck.y,60,'','')}}
   const f=Math.exp(-.35*h);puck.vx*=f;puck.vy*=f;
   if(puck.x<PR){puck.x=PR;wall(0,puck.y,Math.abs(puck.vx));puck.vx=Math.abs(puck.vx)*.92}
   if(puck.x>FW-PR){puck.x=FW-PR;wall(FW,puck.y,Math.abs(puck.vx));puck.vx=-Math.abs(puck.vx)*.92}
@@ -921,19 +937,19 @@ function sub(h,ms){
         // 進行方向はそのまま、速さだけ少し上げて上に跳ぶ
         const sp0=Math.hypot(puck.vx,puck.vy),sp=Math.min(Math.max(sp0*1.1,475),2200);
         if(sp0>1){puck.vx*=sp/sp0;puck.vy*=sp/sp0}else{puck.vx=0;puck.vy=fwd(it.o)*sp}
-        puck.airT=puck.air=1.0;it.hit=.35;slide(250,1600,.4,'square',.07);juice(6,0,.5,.1,YEL);addFx('shock',it.x,it.y,90,'',YEL);
-        addFx('text',puck.x,puck.y,1.3,'ピョーン');addFx('ring',it.x,it.y,110,'',IT.jump.c);addFx('rise',it.x,it.y,1);
+        puck.airT=puck.air=1.0;it.hit=.35;slide(250,1600,.4,'square',.07);juice(6,0,.5,.1,YEL);addFx('wave',it.x,it.y,110,'',IT.jump.c);
+        {const f=addFx('speed',it.x,it.y,1,'',YEL);if(f){f.nx=0;f.ny=fwd(it.o)}}
       }else if(it.type==='boost'&&Math.abs(dx*-it.dy+dy*it.dx)<r*.55+PR*.4&&Math.abs(dx*it.dx+dy*it.dy)<r){
         // 床の向きにスナップして一直線に射出、横ずれはレールのように中心線へ寄せる
         const across=dx*-it.dy+dy*it.dx,sp=Math.min(Math.max(Math.hypot(puck.vx,puck.vy)*1.25,1600),2600);
         puck.x-=-it.dy*across*.35;puck.y-=it.dx*across*.35;
         puck.vx=it.dx*sp;puck.vy=it.dy*sp;puck.boostT=.7;
-        if(it.hit<=0){slide(600,1800,.14,'sawtooth',.05);addFx('text',puck.x,puck.y,1.2,'ギュン!');addFx('burst',puck.x,puck.y,60);addFx('lines',puck.x,puck.y,1);juice(8,.04,1,.1,'#00ffff')}it.hit=.15;
+        if(it.hit<=0){slide(600,1800,.14,'sawtooth',.05);addFx('speed',puck.x,puck.y,1);juice(8,.04,1,.1,'#00ffff')}it.hit=.15;
       }else if(it.type==='bumper'){bumperHit(it,r)
       }else if(it.type==='mud'&&Math.hypot(dx,dy)<r){const k=Math.exp(-5*h);puck.vx*=k;puck.vy*=k;const sp=Math.hypot(puck.vx,puck.vy);if(sp>380){puck.vx*=380/sp;puck.vy*=380/sp}mud=true}
     }
-    if(mud&&!puck.inMud){puck.vx*=.4;puck.vy*=.4;addFx('splash',puck.x,puck.y,1);addFx('text',puck.x,puck.y,1.3,'ズブッ','#55ff55');slide(220,50,.3,'sawtooth',.08);juice(8,.03,.3,.12,'#55ff55')}
-    if(!mud&&puck.inMud){puck.muddy=1.3;addFx('splash',puck.x,puck.y,.6)}
+    if(mud&&!puck.inMud){puck.vx*=.4;puck.vy*=.4;addFx('mud',puck.x,puck.y,1,'in');slide(220,50,.3,'sawtooth',.08);juice(8,.03,.3,.12,'#55ff55')}
+    if(!mud&&puck.inMud){puck.muddy=1.3;addFx('mud',puck.x,puck.y,.6,'out')}
     puck.inMud=mud;
     for(const p of P){const b=p.box;if(b.on&&Math.abs(puck.x-b.x)<28+PR&&Math.abs(puck.y-b.y)<28+PR)give(p)}
   }
@@ -962,7 +978,7 @@ function update(dt){
   const ms=P.map(p=>{
     if(p.stun>0){p.stun=Math.max(0,p.stun-dt*SPD);p.vx=p.vy=0;return {i:p.i,ox:p.x,oy:p.y,nx:p.x,ny:p.y,vx:0,vy:0,x:p.x,y:p.y}} // スタン中は動けない
     const ox=p.x,oy=p.y;let dx=p.tx-ox,dy=p.ty-oy;const inM=placed.some(it=>it.type==='mud'&&Math.hypot(ox-it.x,oy-it.y)<IT.mud.r);const d=Math.hypot(dx,dy),mx=(p.maxV||3400)*(p.boost||1)*(inM?.4:1)*(p.maxV?dt*SPD:dt); // 人の指に追従するマレットは実時間、CPUは世界の速度に合わせる
-    if(inM&&d>5&&Math.random()<dt*10)addFx('bubble',ox+rnd(-30,30),oy+rnd(-30,30),.7);
+    if(inM&&d>5&&Math.random()<dt*10)addFx('mud',ox+rnd(-30,30),oy+rnd(-30,30),.7,'bub');
     if(d>mx){dx*=mx/d;dy*=mx/d}
     p.x=ox+dx;p.y=oy+dy;p.vx=dx/(dt*SPD);p.vy=dy/(dt*SPD); // マレットの速度は世界の時間で表す（衝突の強さ）
     return {i:p.i,ox,oy,nx:p.x,ny:p.y,vx:p.vx,vy:p.vy,x:ox,y:oy};
@@ -976,10 +992,10 @@ function update(dt){
   }
   // 端の壁際で止まったパックを押し出す
   if(SUP.aim<0&&Math.hypot(puck.vx,puck.vy)<40&&(puck.y<FY0+PR+40||puck.y>FY1-PR-40)){puck.still+=gd;
-    if(puck.still>1.2){puck.still=0;puck.vy+=puck.y<MID?240:-240;puck.vx+=puck.x<FW/2?120:-120;addFx('ring',puck.x,puck.y,50,'','#fff');beep(440,.05)}}else puck.still=0;
-  for(const it of placed)if(it.type==='mud'&&Math.random()<gd*2.5)addFx('bubble',it.x+rnd(-45,45),it.y+rnd(-45,45),rnd(.6,1.1));
-  if(puck.inMud&&Math.random()<gd*5)addFx('bubble',puck.x+rnd(-28,28),puck.y+rnd(-28,28),.8);
-  if(puck.muddy>0){puck.muddy-=gd;puck.dropT-=gd;if(puck.dropT<=0){puck.dropT=.05;addFx('drop',puck.x+rnd(-8,8),puck.y+rnd(-8,8),puck.muddy)}}
+    if(puck.still>1.2){puck.still=0;puck.vy+=puck.y<MID?240:-240;puck.vx+=puck.x<FW/2?120:-120;addFx('wave',puck.x,puck.y,50,'','#fff');beep(440,.05)}}else puck.still=0;
+  for(const it of placed)if(it.type==='mud'&&Math.random()<gd*2.5)addFx('mud',it.x+rnd(-45,45),it.y+rnd(-45,45),rnd(.6,1.1),'bub');
+  if(puck.inMud&&Math.random()<gd*5)addFx('mud',puck.x+rnd(-28,28),puck.y+rnd(-28,28),.8,'bub');
+  if(puck.muddy>0){puck.muddy-=gd;puck.dropT-=gd;if(puck.dropT<=0){puck.dropT=.05;addFx('mud',puck.x+rnd(-8,8),puck.y+rnd(-8,8),puck.muddy,'drop')}}
   shake*=Math.exp(-dt*9);
   // 自陣で4秒持ち続けると爆発して相手の得点
   if(puck.sup>=0){puck.supT-=gd;if(puck.supT<=0||Math.hypot(puck.vx,puck.vy)<700)puck.sup=-1} // オーラは遅くなるか時間で消える
@@ -1039,7 +1055,7 @@ function trail(){
     if(kawaii()){ks(hot?'star':KSH[k%2?0:3],t.x+Math.sin(clock*12+k)*4,t.y+Math.cos(clock*12+k)*4,PR*(hot?1.6:1.2)*q*(1+.2*Math.sin(clock*20+k)),(hot?FIRE:RB)[(k+Math.floor(clock*12))%(hot?4:6)],clock*4+k*.7);return}
     if(hot){for(let j=0;j<3;j++)sq(t.x+(hash(k*3+j+clock)-.5)*PR*q,t.y+(hash(k*5+j+clock)-.5)*PR*q,snap(PR*1.5*q*(1-j*.25),3),FIRE[(j+k)%4])}
     else sq(t.x,t.y,snap(PR*1.4*q,6),RB[(k+Math.floor(clock*20))%6])});
-  if(!lite()&&puck.air===0&&Math.hypot(puck.vx,puck.vy)>1400&&Math.random()<.6)addFx('sparks',puck.x,puck.y,.4);
+  if(!lite()&&puck.air===0&&Math.hypot(puck.vx,puck.vy)>1400&&Math.random()<.6)addFx('impact',puck.x,puck.y,8,'','');
 }
 /* ===== かわいい系エフェクト：ドットのハート・星・キラキラ ===== */
 const KMASK={heart:['.XX.XX.','XWXXXXX','XXXXXXX','.XXXXX.','..XXX..','...X...'],
@@ -1060,7 +1076,6 @@ const eOut=t=>1-Math.pow(1-clamp(t,0,1),3),eBack=t=>{t=clamp(t,0,1);const c=1.9;
 const twinkle=(t,ph)=>Math.max(0,Math.sin(t*14+ph));
 function kbub(x,y,r,c,wob=0,al=1){g.save();g.globalAlpha*=al;g.translate(x,y);g.scale(1+wob,1-wob);g.strokeStyle='#000';g.lineWidth=5;g.beginPath();g.arc(0,0,r,0,7);g.stroke();g.strokeStyle=c;g.lineWidth=3;g.stroke();
   g.fillStyle='rgba(255,255,255,.18)';g.fill();g.fillStyle='#fff';g.fillRect(-r*.55,-r*.55,Math.max(3,r*.25),Math.max(3,r*.25));g.restore()}
-const KTXT={'スマッシュ!!':'きらーん!!','ピョーン':'ぴょーん♪','ドスン!':'ぽふっ','ギュン!':'しゅーん','ボヨン':'ぽよよん','ズブッ':'むにゅっ','ドカーン!':'ぱーん!!'};
 const KSH=['heart','star','spark','flower'];
 /* はじけて消える粒（終わり際にキラッ） */
 function kpart(n,x,y,size,c,lt,rot){
@@ -1100,7 +1115,7 @@ function drawFxK(f){
     return true}
   case 'sparks':{for(let k=0;k<7;k++){const a=hash(k+f.a0)*6.2832,R=eOut(p)*(40+hash(k*7+f.a0)*80)*(.6+f.s),tw=twinkle(t*1.3,k*1.7);
       ks('spark',f.x+Math.cos(a)*R,f.y+Math.sin(a)*R+up*p*20,(16*(1-p)+4)*(.4+tw),C[(k+1)%4],0)}return true}
-  case 'lines':{const a=Math.atan2(puck.vy,puck.vx),nx=-Math.sin(a),ny=Math.cos(a);g.save();g.beginPath();g.rect(0,FY0,FW,FL);g.clip();
+  case 'lines':{const a=f.nx!=null?Math.atan2(f.ny,f.nx):Math.atan2(puck.vy,puck.vx),nx=-Math.sin(a),ny=Math.cos(a);g.save();g.beginPath();g.rect(0,FY0,FW,FL);g.clip();
     for(let r=0;r<3;r++){const off=(r-1)*46;for(let k=0;k<16;k++){const d=-k*34*(1-p*.3)-p*120,w=Math.sin(k*.6+t*14+r)*14;
       const x=f.x+Math.cos(a)*d+nx*(off+w),y=f.y+Math.sin(a)*d+ny*(off+w);ks(k%4===0?'star':'heart',x,y,(16-k*.6)*(1-p),T[(r*2+k)%6],a+Math.PI/2,1,1,1-p)}}
     g.restore();return true}
@@ -1132,17 +1147,6 @@ function drawFxK(f){
   case 'drop':{ks('heart',f.x,f.y,(9+f.s*6)*(p<.15?eBack(p/.15):1),T[0],0,1,1,1-p);return true}
   case 'rise':{for(let k=0;k<10;k++){const ph=hash(k+f.a0)*6.2832,R=eOut(p)*(120+hash(k*7)*80),sw=Math.sin(t*8+ph)*26;
       frame(f.i,()=>{const l=local(f.i,f.x,f.y);ks(k%3===0?'flower':k%2?'star':'heart',l.u+Math.cos(ph)*30+sw,l.v-R,(20*(1-p)+6)*(.7+.5*twinkle(t,k)),T[k%6],t*4*(k%2?1:-1))})}return true}
-  case 'text':{
-    frame(f.i,()=>{const l=local(f.i,f.x,f.y),chars=[...f.txt],sz=Math.round(34*f.s),fade=p>.72?1-(p-.72)/.28:1;
-      g.font=sz+'px '+DOT;g.textAlign='center';g.textBaseline='middle';
-      const ws=chars.map(c=>g.measureText(c).width),W=ws.reduce((a,b)=>a+b,0),cx=snap(clamp(l.u,W/2+30,FW-W/2-30)),cy=clamp(l.v-50-eOut(p)*36,FY0+40,FY1-30),o=Math.max(2,Math.round(sz/9));
-      g.save();g.globalAlpha=fade;let x=cx-W/2;
-      chars.forEach((ch,k)=>{const lt=(f.t-k*.05)/.3;if(lt<=0){x+=ws[k];return}const sc=eBack(lt),wy=Math.sin(t*10-k*.9)*5,col=T[k%6];
-        g.save();g.translate(x+ws[k]/2,cy+wy);g.rotate(Math.sin(t*6+k)*.12);g.scale(sc,sc);
-        g.fillStyle='#000';for(const [a,c] of [[-o-2,0],[o+2,0],[0,-o-2],[0,o+2],[-o,-o],[o,o],[-o,o],[o,-o]])g.fillText(ch,a,c);
-        g.fillStyle=col;for(const [a,c] of [[-o,0],[o,0],[0,-o],[0,o]])g.fillText(ch,a,c);g.fillStyle='#fff';g.fillText(ch,0,0);g.restore();x+=ws[k]});
-      for(let k=0;k<4;k++){const a=t*3+k*1.571;ks(k%2?'heart':'star',cx+Math.cos(a)*(W/2+22),cy+Math.sin(a)*sz*.7,14*(.6+.5*twinkle(t,k)),T[(k*2)%6],a)}
-      g.restore()});return true}
   }
   return false;
 }
@@ -1164,7 +1168,6 @@ function drawFxW(f){
   const p=f.t/f.life,t=f.t,C=FXT.spk,T=FXT.tr,up=f.y>MID?-1:1,fade=p>.6?1-(p-.6)/.4:1;
   g.save();g.globalAlpha*=W90A*fade;
   switch(f.k){
-  case 'text':break; // 擬音は出さない
   case 'burst':{const d=f.s*(.15+eOut(p)*.45),L=snap(12*(1-p)+4,2); // ボタンの縁が四隅に割れて離れていく
     for(const [sx,sy] of [[-1,-1],[1,-1],[-1,1],[1,1]])bevCorner(f.x+sx*d,f.y+sy*d,sx,sy,L,3,sx<0&&sy<0?'#fff':sx>0&&sy>0?'#808080':C[1]);
     if(p<.3)wstar(f.x,f.y,14*(1-p/.3)+4,'#fff');break}
@@ -1175,7 +1178,7 @@ function drawFxW(f){
   case 'shock':bevSq(f.x,f.y,f.s*eOut(p)*.9+8,2,f.col);break;
   case 'ring':ants(f.x,f.y,f.s*(.3+.7*eOut(p)),f.col,2);break;
   case 'sparks':for(let k=0;k<3;k++){const a=hash(k+f.a0)*6.2832,R=eOut(p)*(30+hash(k*7+f.a0)*60)*(.6+f.s);wstar(f.x+Math.cos(a)*R,f.y+Math.sin(a)*R,12*(1-p)+4,C[k%4])}break;
-  case 'lines':{const a=Math.atan2(puck.vy,puck.vx),L=200*(1-p*.4);g.beginPath();g.rect(0,FY0,FW,FL);g.clip();g.translate(f.x,f.y);g.rotate(a);rbar(-L-PR,-6,L,12);break} // 細い虹のリボン
+  case 'lines':{const a=f.nx!=null?Math.atan2(f.ny,f.nx):Math.atan2(puck.vy,puck.vx),L=200*(1-p*.4);g.beginPath();g.rect(0,FY0,FW,FL);g.clip();g.translate(f.x,f.y);g.rotate(a);rbar(-L-PR,-6,L,12);break} // 細い虹のリボン
   case 'confetti':{const sc=f.col===COL[0]?0:1;frame(sc,()=>{for(let k=0;k<20*f.s;k++){const x=snap(hash(k)*FW,4),y=FY0-60-hash(k+1)*300+eOut(p*1.1)*(700+hash(k+2)*500)+p*200;if(y<FY0||y>FY1)continue;
       const s=k%2?6:8;g.fillStyle='#000';g.fillRect(x-s/2-2,y-s/2-2,s+4,s+4);g.fillStyle=T[k%6];g.fillRect(x-s/2,y-s/2,s,s);g.fillStyle='#fff';g.fillRect(x-s/2,y-s/2,s,2)}});break}
   case 'big':{g.beginPath();g.rect(0,FY0,FW,FL);g.clip();const y0=f.y<MID?FY0:MID; // 得点側の陣地に虹のラインが2本、左右から伸びる
@@ -1202,10 +1205,35 @@ function drawStop(f){
   for(let r=0;r<rings;r++){const q=clamp(p*1.15-r*.25,0,1);if(q<=0||q>=1)continue;const R=PR+4+eOut(q)*30,s=Math.round(4*(1-q)+2),n=full?12:7;
     for(let k=0;k<n;k++){const a=full?k/n*6.2832+r*.26:back+(k/(n-1)-.5)*1.9+(r?.14:0),px=x+Math.cos(a)*R,py=y+Math.sin(a)*R;g.fillStyle='#000';g.fillRect(px-s/2-1,py-s/2-1,s+2,s+2);g.fillStyle=f.col;g.fillRect(px-s/2,py-s/2,s,s)}}
 }
+/* ARCADE の IMPACT：tools/impact_gen.py のドット絵（パレット番号）を FX COLOR で着色して描く */
+const IMP={idx:null,n:0,sz:32,cache:{}};
+{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=im.width;c.height=im.height;const q=c.getContext('2d');q.drawImage(im,0,0);
+  const d=q.getImageData(0,0,im.width,im.height).data,a=new Uint8Array(im.width*im.height);for(let k=0;k<a.length;k++)a[k]=d[k*4+3]?Math.round(d[k*4]/40):0;
+  IMP.idx=a;IMP.w=im.width;IMP.sz=im.height;IMP.n=im.width/im.height};im.src='fx/impact_idx.png'}
+function impactSheet(pal){const key=pal.join();if(IMP.cache[key])return IMP.cache[key];const c=document.createElement('canvas');c.width=IMP.w;c.height=IMP.sz;const q=c.getContext('2d');
+  for(let y=0;y<IMP.sz;y++)for(let x=0;x<IMP.w;x++){const i=IMP.idx[y*IMP.w+x];if(i){q.fillStyle=pal[i-1];q.fillRect(x,y,1,1)}}return IMP.cache[key]=c}
+function drawImpactA(f){
+  if(!IMP.idx)return false;const S0=FXT.spk,tint=f.col&&f.col!==''?f.col:S0[1];
+  const sh=impactSheet([S0[0],tint,S0[2],S0[3],'#000']),fr=Math.min(IMP.n-1,Math.floor(f.t/f.life*IMP.n)),size=Math.max(16,f.s*(f.s<24?2.6:2.4));
+  g.save();g.imageSmoothingEnabled=false;g.translate(f.x,f.y);
+  if(f.nx!=null){g.translate(f.nx*size*.22,f.ny*size*.22);g.rotate(Math.atan2(f.ny,f.nx));g.scale(.65,1)} // 壁：壁から内側へ向けて平たく
+  g.drawImage(sh,fr*IMP.sz,0,IMP.sz,IMP.sz,-size/2,-size/2,size,size);g.restore();return true}
+/* 8種 → 各スタイルの描画（既存の形を再利用）への対応 */
+function fxViews(f){const v=o=>Object.assign(Object.create(f),o);
+  switch(f.k){
+  case 'impact':return [f.nx!=null?v({k:'wallhit'}):f.s<24?v({k:'sparks',s:f.s/20}):v({k:'burst'})];
+  case 'wave':return [v({k:web90()?'shock':'ring'})];
+  case 'speed':return [v({k:'lines'})];
+  case 'mud':return [f.txt==='bub'?v({k:'bubble'}):f.txt==='drop'?v({k:'drop'}):v({k:'splash'})];
+  case 'goal':{const r=[];if(f.t<1.6)r.push(v({k:'big',life:1.6}));if(!lite())r.push(v({k:'confetti',life:f.life,x:FW/2,y:MID}));return r}
+  case 'spawn':return [v({k:'beam'})];
+  default:return [f]}} // smash, fly
 function drawFx(f){
   if(f.k==='stop'){drawStop(f);return}
-  if(kawaii()&&drawFxK(f))return;
-  if(web90()&&drawFxW(f))return;
+  if(f.k==='impact'&&!kawaii()&&!web90()&&drawImpactA(f))return;
+  for(const w of fxViews(f)){if(kawaii()&&drawFxK(w))continue;if(web90()&&drawFxW(w))continue;drawFxA(w)}
+}
+function drawFxA(f){
   if(f.k==='wallhit'){ // 壁：壁に沿って潰れて広がる1つの衝撃波
     const p=f.t/f.life,fr=Math.floor(f.t*20);g.save();g.translate(f.x,f.y);g.rotate(Math.atan2(f.ny,f.nx));
     const R=f.s*(.35+eOut(p)*.9),n=14;
@@ -1228,16 +1256,13 @@ function drawFx(f){
   }else if(f.k==='ring'){
     const R=f.s*(.35+.9*p),n=16,s=snap(12*(1-p)+3,3);
     for(let k=0;k<n;k++){const a=k/n*6.2832+f.a0;sq(f.x+Math.cos(a)*R,f.y+Math.sin(a)*R,s+6,'#000');sq(f.x+Math.cos(a)*R,f.y+Math.sin(a)*R,s,k%2===fr%2?f.col:'#fff')}
-  }else if(f.k==='text'){
-    if(p>.7&&fr%2)return;
-    frame(f.i,()=>{const l=local(f.i,f.x,f.y);ptext(f.txt,snap(clamp(l.u,80,FW-80)),snap(clamp(l.v-44-Math.floor(p*6)*6,FY0+40,FY1-30)),Math.round(36*f.s),f.col,DOT)});
   }else if(f.k==='shock'){
     const R=snap(f.s*(.3+p),3),w=snap(14*(1-p)+3,3);g.strokeStyle='#000';g.lineWidth=w+6;g.strokeRect(f.x-R,f.y-R,R*2,R*2);g.strokeStyle=fr%2?f.col:'#fff';g.lineWidth=w;g.strokeRect(f.x-R,f.y-R,R*2,R*2);
   }else if(f.k==='sparks'){
     for(let k=0;k<8;k++){const a=hash(k+f.a0)*6.2832,R=p*(40+hash(k*7+f.a0)*90)*(.6+f.s),s=snap(8*(1-p)+3,3);sq(f.x+Math.cos(a)*R,f.y+Math.sin(a)*R,s,FXT.spk[(k+fr)%4])}
   }else if(f.k==='lines'){
     g.save();g.beginPath();g.rect(0,FY0,FW,FL);g.clip();g.globalAlpha=1-p;
-    const a=Math.atan2(puck.vy,puck.vx);g.translate(f.x,f.y);g.rotate(a);
+    const a=f.nx!=null?Math.atan2(f.ny,f.nx):Math.atan2(puck.vy,puck.vx);g.translate(f.x,f.y);g.rotate(a);
     for(let k=0;k<26;k++){const off=(hash(k+f.a0)-.5)*FL*1.2,len=200+hash(k*3)*500,x0=-900+hash(k*5+fr)*600;g.fillStyle=k%3?'#fff':YEL;g.fillRect(x0,off,len,k%4?3:6)}
     g.restore();
   }else if(f.k==='confetti'){
@@ -1404,11 +1429,10 @@ function drawUI(){
     frame(puck.side,()=>{const l=local(puck.side,puck.x,puck.y);ptext(String(Math.ceil(rem)),l.u,l.v-PR-42,22,warn?'#ff0055':'#fff')});}
   slowRays();
   drawSuper();
-  for(const f of fx)if(f.k!=='text')drawFx(f);
+  for(const f of fx)drawFx(f);
   marquee();
   P.forEach(tray);
   ghosts();
-  for(const f of fx)if(f.k==='text')drawFx(f);
   if(state==='title'){
     g.fillStyle='rgba(0,0,0,.6)';g.fillRect(-40,FY0,FW+80,FL);
     frame(0,()=>{pbox(36,TY0,FW-72,300,COL[0]);
@@ -1421,7 +1445,7 @@ function drawUI(){
     });
     frame(1,()=>{pbox(36,TY0+110,FW-72,120,COL[1]);ptext('AIR HOCKEY',FW/2,TY0+172,34,YEL)});
     drawFS();
-    if(NET.disc>0&&blink(3))frame(0,()=>ptext('DISCONNECTED',FW/2,TY0-36,18,'#ff0055'));
+    if(NET.disc>0&&blink(3))frame(0,()=>ptext(NET.discMsg||'DISCONNECTED',FW/2,TY0-36,NET.discMsg?16:18,'#ff0055'));
   }else if(state==='lobby'){drawLobby();
   }else if(state==='pause'){drawPause();
   }else if(state==='options'){drawOptions();
