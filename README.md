@@ -19,7 +19,7 @@
 3. ホームへのスワイプを止めたいときは アクセスガイド（設定 → アクセシビリティ）。
 
 ## バージョン
-- タイトル画面のメニュー枠の右下に `v1.20` のように表示（`site/index.html` の `VER`）。更新のたびに上げる。
+- タイトル画面のメニュー枠の右下に `v1.21` のように表示（`site/index.html` の `VER`）。更新のたびに上げる。
 - 公開ページが最新か迷ったら、この番号で確認する。
 
 ## 実装メモ
@@ -39,6 +39,9 @@ STUN（Google）のみ設定済み。モバイル回線や企業Wi-Fiなど対�
 ### 開発・テスト
 - `?ps=127.0.0.1:9000` で自前の PeerServer（`npx peer --port 9000 --host 127.0.0.1 --path /`）を使う。
 - `?debug` で `window.__AH` に状態を公開（自動テスト用）。
+
+## ツール
+- `tools/aura_gen.py`：スーパーシュートの青いオーラ（燃え立つ炎の輪）のドット絵連番を生成。`python3 tools/aura_gen.py [--preview DIR]` で `site/fx/aura_mallet.png`・`aura_puck.png`（各8コマ）を書き出す（Pillow が必要）。
 
 ## デプロイ
 `.github/workflows/pages.yml` が `site/` を GitHub Pages に公開する。

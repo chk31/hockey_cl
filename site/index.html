@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.20">
+<meta name="version" content="1.21">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.20'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.21'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=200,PR=26,MR=40,MAXV=2100,WIN=7;
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -1314,18 +1314,22 @@ function drawDiag(){
   if(diagP){g.strokeStyle='#ff0';g.lineWidth=2;g.beginPath();g.moveTo(diagP.cx-20,diagP.cy);g.lineTo(diagP.cx+20,diagP.cy);g.moveTo(diagP.cx,diagP.cy-20);g.lineTo(diagP.cx,diagP.cy+20);g.stroke()}
 }
 function auraRing(x,y,R,n,ph){for(let k=0;k<n;k++){const a=k/n*6.2832+ph,px=x+Math.cos(a)*R,py=y+Math.sin(a)*R,s=k%2?6:8;g.fillStyle='#000';g.fillRect(px-s/2-1,py-s/2-1,s+2,s+2);g.fillStyle=k%2?'#fff':AURA;g.fillRect(px-s/2,py-s/2,s,s)}}
+/* 青いオーラ：tools/aura_gen.py で作ったドット絵の連番（8コマ・12コマ/秒）。読み込み前だけ点の輪で代用 */
+const AURA_IMG={m:new Image(),p:new Image()};AURA_IMG.m.src='fx/aura_mallet.png';AURA_IMG.p.src='fx/aura_puck.png';
+function auraSpr(img,x,y,size,ph=0,al=1){if(!img.complete||!img.naturalWidth)return false;const n=8,fw=img.naturalWidth/n,fr=((Math.floor(clock*12)+ph)%n+n)%n;
+  g.save();g.imageSmoothingEnabled=false;g.globalAlpha*=al;g.drawImage(img,fr*fw,0,fw,img.naturalHeight,x-size/2,y-size/2,size,size);g.restore();return true}
 function drawSuper(){
   for(const p of P){
-    if(p.pw){const pu=Math.sin(clock*8)*3;auraRing(p.x,p.y,MR+10+pu,16,clock*2);auraRing(p.x,p.y,MR+20-pu,10,-clock*1.5); // 強化中の青いオーラ
-      for(let k=0;k<4;k++){const q=(clock*1.2+k/4)%1,a=k*1.57+clock;sq(p.x+Math.cos(a)*(MR-6),p.y+Math.sin(a)*(MR-6)-q*40,6,q<.5?AURA:'#fff')}}
+    if(p.pw&&!auraSpr(AURA_IMG.m,p.x,p.y,160,p.i*3))auraRing(p.x,p.y,MR+10,16,clock*2); // 強化中：マレットを包んで燃え立つ青い炎
     if(p.stun>0){for(let k=0;k<3;k++){const a=clock*6+k*2.094;ks('star',p.x+Math.cos(a)*(MR+12),p.y+Math.sin(a)*(MR+12)*.5-MR*.4,18,YEL,clock*4)} // スタン：頭上で星が回る
       sq(p.x,p.y,8,blink(8)?'#fff':YEL)}
   }
-  if(puck.sup>=0&&!puck.boom){auraRing(puck.x,puck.y,PR+10+Math.sin(clock*20)*2,12,clock*4); // スーパーシュート中のパック
-    for(let k=1;k<puck.trail.length;k++){const t=puck.trail[k],q=k/puck.trail.length;sq(t.x,t.y,snap(PR*1.4*q,2),k%2?AURA:'#fff')}}
+  if(puck.sup>=0&&!puck.boom){const tr=puck.trail,n=tr.length; // スーパーシュート中のパック：炎のオーラ＋炎の残像2つ
+    for(const [k,al] of [[n-5,.25],[n-3,.5]])if(tr[k])auraSpr(AURA_IMG.p,tr[k].x,tr[k].y,112,k,al);
+    if(!auraSpr(AURA_IMG.p,puck.x,puck.y,112,5))auraRing(puck.x,puck.y,PR+10,12,clock*4)}
   if(SUP.aim>=0){const i=SUP.aim,p=P[i];let dx=SUP.dx,dy=SUP.dy,fp=null; // 構え：パックの周りに残り時間、発射方向の点線、指からの引っ張り線
     const mine=NET.role==='guest'?(i===1&&NET.myPtr!=null):p.ptr!=null;if(mine&&p.fx!=null){const ax=puck.x-p.fx,ay=puck.y-p.fy,d=Math.hypot(ax,ay);if(d>=20){dx=ax/d;dy=ay/d;fp={x:p.fx,y:p.fy}}}
-    auraRing(puck.x,puck.y,PR+12,12,clock*3);ring(puck.x,puck.y,PR+30,SUP.t,AURA);
+    if(!auraSpr(AURA_IMG.p,puck.x,puck.y,112,2))auraRing(puck.x,puck.y,PR+12,12,clock*3);ring(puck.x,puck.y,PR+34,SUP.t,AURA);
     for(let k=1;k<=10;k++){const x=puck.x+dx*(PR+20+k*22),y=puck.y+dy*(PR+20+k*22);sq(x,y,k%2?12:8,'#000');sq(x,y,k%2?9:6,blink(8)===!!(k%2)?AURA:'#fff')}
     if(fp){const n=Math.floor(Math.hypot(puck.x-fp.x,puck.y-fp.y)/16);for(let k=1;k<n;k++)sq(fp.x+(puck.x-fp.x)*k/n,fp.y+(puck.y-fp.y)*k/n,4,'#fff')}}
 }
