@@ -311,12 +311,14 @@ function addFx0(k,x,y,s=1,txt='',col=YEL){
   return o;
 }
 let lastHit=0;
-function juice(sh,stop,a,fl,col='#ffffff'){relay(['j',sh,stop,a,fl,ck(col)]);if(minimal())return;if(lite()){sh*=.2;stop=0;a=0;fl*=.25}shake=Math.max(shake,sh);hitstop=Math.max(hitstop,stop);ab=Math.max(ab,a);if(fl>flash){flash=fl;fcol=hex(col)}}
+function juice(sh,stop,a,fl,col='#ffffff'){relay(['j',sh,stop,a,fl,ck(col)]);hitstop=Math.max(hitstop,stop); // ヒットストップは FX LEVEL に関係なく発生（MIN でも）
+  if(minimal())return;if(lite()){sh*=.2;a=0;fl*=.25}shake=Math.max(shake,sh);ab=Math.max(ab,a);if(fl>flash){flash=fl;fcol=hex(col)}}
+const SMASH=1850; // スマッシュ判定の相対速度（旧 1600）。最高速 2100 に近い強打だけ
 function hit(x,y,sp,txt,who=-1,wn=null){
   const t=performance.now();if(t-lastHit<60)return;lastHit=t;
   beep(220+Math.min(sp,2000)*.3,.045,'square',.07);
   if(wn){if(sp>150){const f=addFx('wallhit',x,y,clamp(sp/18,34,100));if(f){f.nx=wn[0];f.ny=wn[1]}}if(sp>1000)juice(6,.03,.4,.06);return}
-  if(sp>1600&&who>=0){juice(18,.09,1,.35,COL[who]);noise(.25,.12);const f=addFx('smash',x,y,1,'',COL[who]);if(f)f.ang=Math.atan2(puck.vy,puck.vx);addFx('text',x,y,1.5,'スマッシュ!!',YEL);return}
+  if(sp>SMASH&&who>=0){juice(18,.09,1,.35,COL[who]);noise(.25,.12);const f=addFx('smash',x,y,1,'',COL[who]);if(f)f.ang=Math.atan2(puck.vy,puck.vx);addFx('text',x,y,1.5,'スマッシュ!!',YEL);return}
   if(sp>150)addFx('burst',x,y,clamp(sp/18,26,110));
   if(sp>500)addFx('shock',x,y,clamp(sp/12,40,160),'',who>=0?COL[who]:'#fff');
   if(sp>1000)juice(9,.05,.6,.12,who>=0?COL[who]:'#ffffff');
@@ -1327,7 +1329,7 @@ if(window.visualViewport)visualViewport.addEventListener('resize',resizeSoon);
 if(document.fonts&&document.fonts.load){document.fonts.load('20px "Press Start 2P"');document.fonts.load('20px DotGothic16')}
 requestAnimationFrame(loop);
 // 開発・テスト用（?debug のときだけ）：状態の参照と論理座標→画面座標
-if(/[?&]debug/.test(location.search))window.__AH={get SPD(){return SPD},NET,LOB,get P(){return P},puck,get arm(){return arm},get drags(){return [...drags.values()]},get placed(){return placed},get state(){return state},get mode(){return mode},get live(){return live},get ts(){return ts},get fx(){return fx},get viewFlip(){return viewFlip},
+if(/[?&]debug/.test(location.search))window.__AH={get SPD(){return SPD},get hitstop(){return hitstop},get shake(){return shake},hit:(...a)=>hit(...a),NET,LOB,get P(){return P},puck,get arm(){return arm},get drags(){return [...drags.values()]},get placed(){return placed},get state(){return state},get mode(){return mode},get live(){return live},get ts(){return ts},get fx(){return fx},get viewFlip(){return viewFlip},
   scr(x,y){if(viewFlip){x=FW-x;y=TL-y}return rot?{x:VX+OX+y*S,y:VY+OY+(FW-x)*S}:{x:VX+OX+x*S,y:VY+OY+y*S}},give(i,k){P[i].items.push(k)},spawnFx(k,x,y,sc,col,ex){const f=addFx(k,x,y,sc,'',col);if(f&&ex)Object.assign(f,ex);return !!f},setTH(o){Object.assign(TH,o);applyTheme()},rx,pdown,ctl};
 }
 </script>
