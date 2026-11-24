@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.25">
+<meta name="version" content="1.26">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.25'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.26'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=200,PR=26,MR=40,MAXV=2100,WIN=7;
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -465,14 +465,37 @@ const TY0=MID+40,BH=72,btnY=b=>b.m==='cpu'?TY0+108:TY0+200;
 /* ================= オンライン対戦（P2P / PeerJS・ホスト権威型） =================
    ホスト＝1P（下）が物理・ルールを全部計算。ゲスト＝2P（上）は入力を送り、届いた状態を約100ms遅れで補間して描く。
    ゲスト端末は表示を180°反転して自分が下に来る（viewFlip）。 */
+/* TURN（中継）サーバー：別回線（モバイル回線など）で直接つながらないときに通信を中継する。Metered.ca を使う。
+   app＝Metered のアプリ名（xxx.metered.live の xxx）、key＝TURN 認証情報 API のキー（サイトに公開される種類のキー）。
+   空のときは STUN だけ（同じ Wi-Fi など直接つながる場合のみ）。URL の ?turnapp=...&turnkey=... でも一時的に指定できる */
+const TURN_CFG={app:'',key:''};
+try{const q=new URLSearchParams(location.search);if(q.get('turnapp'))TURN_CFG.app=q.get('turnapp');if(q.get('turnkey'))TURN_CFG.key=q.get('turnkey')}catch(e){}
+let RELAY_ONLY=false;try{RELAY_ONLY=new URLSearchParams(location.search).has('relayonly')}catch(e){} // 確認用：?relayonly で中継（TURN）経由だけでつなぐ
+let iceReady=null;
+function loadIce(){ // 接続前に一度だけ中継サーバーの情報を取りに行く（失敗しても STUN だけで続ける）
+  if(iceReady)return iceReady;
+  iceReady=(async()=>{if(!TURN_CFG.app||!TURN_CFG.key){NET.turn=0;return}
+    try{const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),5000);
+      const r=await fetch(`https://${TURN_CFG.app}.metered.live/api/v1/turn/credentials?apiKey=${encodeURIComponent(TURN_CFG.key)}`,{signal:ctl.signal});clearTimeout(to);
+      const list=r.ok?await r.json():null;
+      if(Array.isArray(list)&&list.length){PEER_CONFIG.config.iceServers=PEER_CONFIG.config.iceServers.concat(list);NET.turn=1}else{NET.turn=-1;iceReady=null}}
+    catch(e){NET.turn=-1;iceReady=null}})(); // 失敗したら次の接続でもう一度試す
+  return iceReady}
+/* つながった経路を調べる：relay＝TURN 経由、direct＝直接 */
+function checkPath(){const pc=NET.ev&&NET.ev.peerConnection;if(!pc||!pc.getStats)return;
+  pc.getStats().then(st=>{let pair=null;st.forEach(r=>{if(r.type==='transport'&&r.selectedCandidatePairId)pair=st.get(r.selectedCandidatePairId)});
+    if(!pair)st.forEach(r=>{if(r.type==='candidate-pair'&&r.state==='succeeded'&&(r.nominated||r.selected))pair=r});
+    const lc=pair&&st.get(pair.localCandidateId),rc=pair&&st.get(pair.remoteCandidateId);
+    if(lc)NET.path=(lc.candidateType==='relay'||(rc&&rc.candidateType==='relay'))?'relay':'direct'}).catch(()=>{})}
 const PEER_CONFIG={debug:1,config:{iceServers:[
   {urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}
-  // 別回線でつながらないときは TURN を追加：{urls:'turn:turn.example.com:3478',username:'USER',credential:'PASS'}
+  // TURN（中継）は上の TURN_CFG で Metered から取得して後から足す
 ]}};
+if(RELAY_ONLY)PEER_CONFIG.config.iceTransportPolicy='relay';
 try{const q=new URLSearchParams(location.search).get('ps');if(q){const [h,pt]=q.split(':');Object.assign(PEER_CONFIG,{host:h,port:+pt||9000,path:'/',secure:false})}}catch(e){} // 開発用：?ps=localhost:9000 で自前のPeerServer
 const PV=2,PREFIX='aihockey-',DMIN=25,DMAX=120,SNAP_MS=15,TIMEOUT=3000;
 let viewFlip=false,noFwd=false,rctx=false;
-const NET={role:null,peer:null,ev:null,st:null,gp:null,open:false,code:'',fxq:[],evq:[],snaps:[],applied:null,off:null,lastRx:0,lastSnap:0,lastPing:0,rtt:-1,ptrs:new Map(),myPtr:null,dly:60,jit:10,gap:17,lastHt:0,seq:0,rseq:new Map(),disc:0,cto:0};
+const NET={turn:0,path:'',role:null,peer:null,ev:null,st:null,gp:null,open:false,code:'',fxq:[],evq:[],snaps:[],applied:null,off:null,lastRx:0,lastSnap:0,lastPing:0,rtt:-1,ptrs:new Map(),myPtr:null,dly:60,jit:10,gap:17,lastHt:0,seq:0,rseq:new Map(),disc:0,cto:0};
 const LOB={sub:'menu',input:'',err:0,busy:false};
 const hnow=()=>performance.now();
 const relayOn=()=>NET.role==='host'&&mode==='online'&&NET.open&&!noFwd;
@@ -487,7 +510,7 @@ function netReset(){
   const pr=NET.peer,cs=[NET.ev,NET.st];
   Object.assign(NET,{peer:null,role:null,ev:null,st:null,gp:null,open:false,fxq:[],off:null,rtt:-1});clearTimeout(NET.cto);LOB.busy=false;
   for(const c of cs)if(c)try{c.close()}catch(e){}
-  if(pr)try{pr.destroy()}catch(e){}
+  if(pr&&pr.destroy)try{pr.destroy()}catch(e){}
 }
 function verMismatch(){netLost();NET.disc=4;NET.discMsg='VERSION MISMATCH'}
 function netLost(self){NET.discMsg=''; // 切断：DISCONNECTED を出してタイトルへ（self＝自分でQUITしたときは表示しない）
@@ -503,6 +526,7 @@ function wire(c){
   c.on('error',()=>{});
 }
 function onOpen(){
+  NET.path='';setTimeout(checkPath,1500);setTimeout(checkPath,5000);
   if(NET.open)return;NET.open=true;NET.lastRx=hnow();clearTimeout(NET.cto);LOB.busy=false;
   if(NET.role==='host'){hostBegin()}else{LOB.sub='ready';_seq([988,1319],.07)}
 }
@@ -510,6 +534,10 @@ function hostBegin(){noFwd=true;try{clearMatch();start('online')}finally{noFwd=f
 function hostOpen(){
   netReset();NET.role='host';LOB.sub='host';LOB.err=0;LOB.busy=true;
   NET.code=String(Math.floor(1000+Math.random()*9000));
+  const my={};NET.peer=my; // 中継サーバーの情報を待つ間の目印（戻るボタンで別の接続になったら中止）
+  loadIce().then(()=>{if(NET.peer===my&&NET.role==='host')hostPeer()});
+}
+function hostPeer(){
   const pr=new Peer(PREFIX+NET.code,PEER_CONFIG);NET.peer=pr;
   pr.on('open',()=>{if(NET.peer===pr)LOB.busy=false});
   pr.on('connection',c=>{
@@ -521,6 +549,10 @@ function hostOpen(){
 }
 function joinOpen(code){
   netReset();NET.role='guest';LOB.busy=true;LOB.err=0;NET.code=code;
+  const my={};NET.peer=my;
+  loadIce().then(()=>{if(NET.peer===my&&NET.role==='guest')joinPeer(code)});
+}
+function joinPeer(code){
   const pr=new Peer(PEER_CONFIG);NET.peer=pr;
   const fail=()=>{if(NET.peer!==pr||NET.open)return;netReset();LOB.sub='join';LOB.err=1.5;LOB.input='';_seq([300,200],.08)};
   pr.on('open',()=>{if(NET.peer!==pr)return;
@@ -689,6 +721,7 @@ function netTick(){ // 生存確認（1秒ごとに ping、3秒無応答で切�
   }
 }
 setInterval(netTick,250);
+if(window.Peer)setTimeout(()=>loadIce(),1500); // 先に取っておく（接続を待たせない）
 addEventListener('pagehide',()=>{if(NET.open)send({t:'bye'})});
 /* ---- ロビー（ONLINE） ---- */
 const KEYPAD=[1,2,3,4,5,6,7,8,9,0,'DEL','OK'],keyR=k=>({x:62+(k%4)*122,y:TY0+92+Math.floor(k/4)*68,w:110,h:60}),BACK={x:52,y:TY0+16,w:60,h:46};
@@ -1428,7 +1461,7 @@ function drawDiag(){
   const vv=window.visualViewport,sa=getComputedStyle(document.getElementById('sa')),rc=ui.getBoundingClientRect();
   const L=[`W×H ${W}×${H}  inner ${innerWidth}×${innerHeight}`,`vv ${vv?Math.round(vv.width)+'×'+Math.round(vv.height)+' @'+Math.round(vv.offsetTop):'-'}  screen ${screen.width}×${screen.height}`,
     `rect ${Math.round(rc.left)},${Math.round(rc.top)} ${Math.round(rc.width)}×${Math.round(rc.height)}  dpr ${dpr}`,`safe T${sa.paddingTop} B${sa.paddingBottom} L${sa.paddingLeft} R${sa.paddingRight}`,
-    `standalone ${navigator.standalone} rot ${rot} S ${S.toFixed(3)}  v${VER}`];
+    `standalone ${navigator.standalone} rot ${rot} S ${S.toFixed(3)}  v${VER}`,`turn ${TURN_CFG.app?(NET.turn===1?'ok':NET.turn===-1?'fail':'-'):'none'}  path ${NET.path||'-'}`];
   g.fillStyle='rgba(0,0,0,.75)';g.fillRect(8,60,330,L.length*16+8);g.fillStyle='#0f0';L.forEach((t,i)=>g.fillText(t,12,64+i*16));
   if(diagP){g.strokeStyle='#ff0';g.lineWidth=2;g.beginPath();g.moveTo(diagP.cx-20,diagP.cy);g.lineTo(diagP.cx+20,diagP.cy);g.moveTo(diagP.cx,diagP.cy-20);g.lineTo(diagP.cx,diagP.cy+20);g.stroke()}
 }
@@ -1495,7 +1528,7 @@ function drawUI(){
       {t:`${P[i].score} - ${P[1-i].score}`,y:120,s:30,c:COL[i]},{t:overT>1.5?'▶':'',y:186,s:22,f:DOT,blink:true}],i===win?COL[i]:'#555');
   }
   if(mode==='online'&&NET.open&&NET.rtt>=0&&state!=='lobby'){const me=NET.role==='guest'?1:0,r=Math.round(NET.rtt); // RTT(ms)
-    frame(me,()=>ptext(String(r),FW-20,FY1+TRAY+18,8,r<60?'#55ff55':r<120?YEL:'#ff0055',PIX,'right'))}
+    frame(me,()=>ptext(String(r)+(NET.path==='relay'?' R':''),FW-20,FY1+TRAY+18,8,r<60?'#55ff55':r<120?YEL:'#ff0055',PIX,'right'))}
 }
 function drawAll(){drawUI();if(DIAG)drawDiag()}
 let last=performance.now();
