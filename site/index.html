@@ -313,7 +313,7 @@ function addFx0(k,x,y,s=1,txt='',col=YEL){
   return o;
 }
 let lastHit=0;
-function juice(sh,stop,a,fl,col='#ffffff'){relay(['j',sh,stop,a,fl,ck(col)]);hitstop=Math.max(hitstop,stop);if(stop>0&&minimal())addFx0('stop',puck.x,puck.y,stop,'',col); // ヒットストップは FX LEVEL に関係なく発生（MIN でも）
+function juice(sh,stop,a,fl,col='#ffffff'){relay(['j',sh,stop,a,fl,ck(col)]);hitstop=Math.max(hitstop,stop);if(stop>0&&minimal())stopCue(stop,col); // ヒットストップは FX LEVEL に関係なく発生（MIN でも）
   if(minimal())return;if(lite()){sh*=.2;a=0;fl*=.25}shake=Math.max(shake,sh);ab=Math.max(ab,a);if(fl>flash){flash=fl;fcol=hex(col)}}
 const SMASH=1850; // スマッシュ判定の相対速度（旧 1600）。最高速 2100 に近い強打だけ
 function hit(x,y,sp,txt,who=-1,wn=null){
@@ -588,7 +588,7 @@ function applySnap(a){
 function playEv(e){
 if(e[1]==='f'){const f=addFx0(e[2],e[3],e[4],e[5],e[6],uk(e[7]));if(f)Object.assign(f,e[8]||{})}
     else if(e[1]==='s'){const fn=SND[e[2]];if(fn)fn(...e[3])}
-    else if(e[1]==='j'){juice(e[2],0,e[4],e[5],uk(e[6]));if(e[3]>0&&minimal())addFx0('stop',puck.x,puck.y,e[3],'',uk(e[6]))}
+    else if(e[1]==='j'){juice(e[2],0,e[4],e[5],uk(e[6]));if(e[3]>0&&minimal())stopCue(e[3],uk(e[6]))}
     else if(e[1]==='z')zoneFl=.6}
 function guestUpdate(dt){
   for(const p of P)p.fl=Math.max(0,p.fl-dt);zoneFl=Math.max(0,zoneFl-dt);
@@ -1106,11 +1106,13 @@ function drawFxW(f){
   g.restore();return true;
 }
 function pixStar(R,ri,n,sx,a0){g.beginPath();for(let k=0;k<n*2;k++){const r=k&1?ri:R,a=a0+k*Math.PI/n;g.lineTo(snap(Math.cos(a)*r*sx,6),snap(Math.sin(a)*r,6))}g.closePath()}
-/* MIN 専用：ヒットストップの合図。パックから小さな点の輪がそっと広がって消える（揺れ・フラッシュなし）。強い停止は2重 */
+/* MIN 専用：ヒットストップの合図。パックの進む方向の逆側（後ろ）に小さな点が扇形に広がって消える（揺れ・フラッシュなし）。強い停止は2重
+   向きは発生した瞬間の進行方向で固定。パックがほぼ止まっていて向きが決まらないときだけ全周の輪にする */
+function stopCue(stop,col){const f=addFx0('stop',puck.x,puck.y,stop,'',col);if(f){const sp=Math.hypot(puck.vx,puck.vy);f.ang=sp>30?Math.atan2(puck.vy,puck.vx):null}}
 function drawStop(f){
-  const p=clamp(f.t/f.life,0,1),x=puck.x,y=puck.y,rings=f.s>=.09?2:1;
-  for(let r=0;r<rings;r++){const q=clamp(p*1.15-r*.25,0,1);if(q<=0||q>=1)continue;const R=PR+4+eOut(q)*30,s=Math.round(4*(1-q)+2);
-    for(let k=0;k<12;k++){const a=k/12*6.2832+r*.26,px=x+Math.cos(a)*R,py=y+Math.sin(a)*R;g.fillStyle='#000';g.fillRect(px-s/2-1,py-s/2-1,s+2,s+2);g.fillStyle=f.col;g.fillRect(px-s/2,py-s/2,s,s)}}
+  const p=clamp(f.t/f.life,0,1),x=puck.x,y=puck.y,rings=f.s>=.09?2:1,full=f.ang==null,back=full?0:f.ang+Math.PI;
+  for(let r=0;r<rings;r++){const q=clamp(p*1.15-r*.25,0,1);if(q<=0||q>=1)continue;const R=PR+4+eOut(q)*30,s=Math.round(4*(1-q)+2),n=full?12:7;
+    for(let k=0;k<n;k++){const a=full?k/n*6.2832+r*.26:back+(k/(n-1)-.5)*1.9+(r?.14:0),px=x+Math.cos(a)*R,py=y+Math.sin(a)*R;g.fillStyle='#000';g.fillRect(px-s/2-1,py-s/2-1,s+2,s+2);g.fillStyle=f.col;g.fillRect(px-s/2,py-s/2,s,s)}}
 }
 function drawFx(f){
   if(f.k==='stop'){drawStop(f);return}
