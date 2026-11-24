@@ -301,17 +301,19 @@ function addFx(k,x,y,s=1,txt='',col=YEL){
 }
 function addFx0(k,x,y,s=1,txt='',col=YEL){
   if(k==='text')return null; // 文字のエフェクト（擬音）は全モードで出さない
-  if(minimal()&&k!=='fly')return null; // 最低限モード：アイテムが欄に飛ぶ表示だけ残す
+  if(k==='stop'&&!minimal())return null; // ヒットストップの合図は MIN 専用
+  if(minimal()&&k!=='fly'&&k!=='stop')return null; // 最低限モード：アイテムが欄に飛ぶ表示とヒットストップの合図だけ残す
   if(k==='text'&&kawaii())txt=KTXT[txt]||txt;
   if(lite()){if(LITE_SKIP[k])return;if(k==='burst'&&fx.filter(f=>f.k==='burst').length>=2)return;if(k==='burst'||k==='shock'||k==='ring')s*=.6}
   if(fx.length>90)fx.shift();
   const o={k,x,y,s,txt,col,t:0,a0:Math.random()*6,life:{wallhit:.4,smash:.6,text:.8,ring:.5,big:1.6,burst:.4,shock:.4,lines:.35,sparks:.4,confetti:2.2,beam:.7,fly:.5,splash:.6,bubble:.7,drop:1.4,rise:.6}[k],i:y>MID?0:1};fx.push(o);
-  if(web90()&&k!=='fly'&&k!=='big')o.life*=.75; // WEB90 は短めに
+  if(k==='stop')o.life=s+.22; // ヒットストップの長さ＋少しの余韻
+  if(web90()&&k!=='fly'&&k!=='big'&&k!=='stop')o.life*=.75; // WEB90 は短めに
   if(kawaii()){const L={wallhit:1.4,smash:1.5,burst:1.7,text:1.4,shock:1.4,ring:1.4,splash:1.6,big:1.25,confetti:1.3,sparks:1.5,bubble:1.3,beam:1.2,rise:1.4,lines:1.6}[k];if(L)o.life*=L}
   return o;
 }
 let lastHit=0;
-function juice(sh,stop,a,fl,col='#ffffff'){relay(['j',sh,stop,a,fl,ck(col)]);hitstop=Math.max(hitstop,stop); // ヒットストップは FX LEVEL に関係なく発生（MIN でも）
+function juice(sh,stop,a,fl,col='#ffffff'){relay(['j',sh,stop,a,fl,ck(col)]);hitstop=Math.max(hitstop,stop);if(stop>0&&minimal())addFx0('stop',puck.x,puck.y,stop,'',col); // ヒットストップは FX LEVEL に関係なく発生（MIN でも）
   if(minimal())return;if(lite()){sh*=.2;a=0;fl*=.25}shake=Math.max(shake,sh);ab=Math.max(ab,a);if(fl>flash){flash=fl;fcol=hex(col)}}
 const SMASH=1850; // スマッシュ判定の相対速度（旧 1600）。最高速 2100 に近い強打だけ
 function hit(x,y,sp,txt,who=-1,wn=null){
@@ -586,7 +588,7 @@ function applySnap(a){
 function playEv(e){
 if(e[1]==='f'){const f=addFx0(e[2],e[3],e[4],e[5],e[6],uk(e[7]));if(f)Object.assign(f,e[8]||{})}
     else if(e[1]==='s'){const fn=SND[e[2]];if(fn)fn(...e[3])}
-    else if(e[1]==='j')juice(e[2],0,e[4],e[5],uk(e[6]));
+    else if(e[1]==='j'){juice(e[2],0,e[4],e[5],uk(e[6]));if(e[3]>0&&minimal())addFx0('stop',puck.x,puck.y,e[3],'',uk(e[6]))}
     else if(e[1]==='z')zoneFl=.6}
 function guestUpdate(dt){
   for(const p of P)p.fl=Math.max(0,p.fl-dt);zoneFl=Math.max(0,zoneFl-dt);
@@ -1104,7 +1106,14 @@ function drawFxW(f){
   g.restore();return true;
 }
 function pixStar(R,ri,n,sx,a0){g.beginPath();for(let k=0;k<n*2;k++){const r=k&1?ri:R,a=a0+k*Math.PI/n;g.lineTo(snap(Math.cos(a)*r*sx,6),snap(Math.sin(a)*r,6))}g.closePath()}
+/* MIN 専用：ヒットストップの合図。パックから小さな点の輪がそっと広がって消える（揺れ・フラッシュなし）。強い停止は2重 */
+function drawStop(f){
+  const p=clamp(f.t/f.life,0,1),x=puck.x,y=puck.y,rings=f.s>=.09?2:1;
+  for(let r=0;r<rings;r++){const q=clamp(p*1.15-r*.25,0,1);if(q<=0||q>=1)continue;const R=PR+4+eOut(q)*30,s=Math.round(4*(1-q)+2);
+    for(let k=0;k<12;k++){const a=k/12*6.2832+r*.26,px=x+Math.cos(a)*R,py=y+Math.sin(a)*R;g.fillStyle='#000';g.fillRect(px-s/2-1,py-s/2-1,s+2,s+2);g.fillStyle=f.col;g.fillRect(px-s/2,py-s/2,s,s)}}
+}
 function drawFx(f){
+  if(f.k==='stop'){drawStop(f);return}
   if(kawaii()&&drawFxK(f))return;
   if(web90()&&drawFxW(f))return;
   if(f.k==='wallhit'){ // 壁：壁に沿って潰れて広がる1つの衝撃波
@@ -1316,7 +1325,7 @@ let last=performance.now();
 function loop(t){
   {const [w,h]=measure();if(w!==W||h!==H)resize()} // 表示サイズが変わっていたら即座に測り直す（タッチ位置のずれ防止）
   const dt=Math.min(.033,Math.max(.001,(t-last)/1000));last=t;
-  try{if(hitstop>0){hitstop-=dt;clock+=dt*.2}else update(dt);shake*=Math.exp(-dt*9);ab=Math.max(0,ab-dt*4);railFlash=Math.max(0,railFlash-dt);rallyPop=Math.max(0,rallyPop-dt);if(has3D)render3D();drawAll();hostFlush()}catch(err){console.error(err)}
+  try{if(hitstop>0){hitstop-=dt;clock+=dt*.2;for(const f of fx)if(f.k==='stop')f.t+=dt}else update(dt);shake*=Math.exp(-dt*9);ab=Math.max(0,ab-dt*4);railFlash=Math.max(0,railFlash-dt);rallyPop=Math.max(0,rallyPop-dt);if(has3D)render3D();drawAll();hostFlush()}catch(err){console.error(err)}
   requestAnimationFrame(loop);
 }
 applyTheme();if(has3D){build3D();applyTheme()}
