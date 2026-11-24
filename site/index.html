@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
+<meta name="version" content="1.18">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -37,6 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
+const VER='1.18'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=200,PR=26,MR=40,MAXV=2100,WIN=7;
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -1276,7 +1278,7 @@ function drawDiag(){
   const vv=window.visualViewport,sa=getComputedStyle(document.getElementById('sa')),rc=ui.getBoundingClientRect();
   const L=[`W×H ${W}×${H}  inner ${innerWidth}×${innerHeight}`,`vv ${vv?Math.round(vv.width)+'×'+Math.round(vv.height)+' @'+Math.round(vv.offsetTop):'-'}  screen ${screen.width}×${screen.height}`,
     `rect ${Math.round(rc.left)},${Math.round(rc.top)} ${Math.round(rc.width)}×${Math.round(rc.height)}  dpr ${dpr}`,`safe T${sa.paddingTop} B${sa.paddingBottom} L${sa.paddingLeft} R${sa.paddingRight}`,
-    `standalone ${navigator.standalone} rot ${rot} S ${S.toFixed(3)}`];
+    `standalone ${navigator.standalone} rot ${rot} S ${S.toFixed(3)}  v${VER}`];
   g.fillStyle='rgba(0,0,0,.75)';g.fillRect(8,60,330,L.length*16+8);g.fillStyle='#0f0';L.forEach((t,i)=>g.fillText(t,12,64+i*16));
   if(diagP){g.strokeStyle='#ff0';g.lineWidth=2;g.beginPath();g.moveTo(diagP.cx-20,diagP.cy);g.lineTo(diagP.cx+20,diagP.cy);g.moveTo(diagP.cx,diagP.cy-20);g.lineTo(diagP.cx,diagP.cy+20);g.stroke()}
 }
@@ -1298,7 +1300,7 @@ function drawUI(){
   if(state==='title'){
     g.fillStyle='rgba(0,0,0,.6)';g.fillRect(-40,FY0,FW+80,FL);
     frame(0,()=>{pbox(36,TY0,FW-72,300,COL[0]);
-      ptext('AIR HOCKEY',FW/2,TY0+58,34,YEL);
+      ptext('AIR HOCKEY',FW/2,TY0+58,34,YEL);ptext('v'+VER,FW-48,TY0+286,8,'#777',PIX,'right');
       BTN.forEach(b=>{const y=btnY(b),hl=b.m!=='opt'&&b.m!=='net'&&b.m===mode&&(b.l==null||b.l===lvl);pbox(b.x,y,b.w,BH,hl?(blink(2)?YEL:'#fff'):'#666',hl?'#1a1a1a':'#000');
         if(b.m==='2p')ptext('2P',b.x+b.w/2,y+BH/2+2,20,'#fff');
         else if(b.m==='opt')ptext('OPTION',b.x+b.w/2,y+BH/2+2,14,'#fff');
