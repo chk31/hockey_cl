@@ -1,0 +1,10 @@
+{
+  "name": "howto-rec",
+  "private": true,
+  "description": "遊び方ページの動画を撮る（Playwright＋ffmpeg）",
+  "dependencies": {
+    "three": "0.128.0",
+    "@fontsource/press-start-2p": "^5.0.0",
+    "@fontsource/dotgothic16": "^5.0.0"
+  }
+}

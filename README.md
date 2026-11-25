@@ -53,6 +53,7 @@
 - GAME ページ：PARRY WIN（パリィの受付時間 10〜300ms・5ms刻み、標準 25ms）と PARRY STOP（止まる時間 0.1〜2.0秒、標準 1.0秒）、PARRY SPD（パリィできるパックの速さの下限 400〜2000、標準 1000）はここで変えた値が保存され、ゲームに使われる（ゲームスピードとは独立、オンラインはホストの値）。
 
 ## ツール
+- `tools/howto/`：遊び方ページの動画（`site/howto/*.mp4`）を撮る台本。Playwright でゲームを実際に動かして録画し、ffmpeg で切り出す（指の位置は白い輪で表示）。`cd tools/howto && npm i` のあと、`site/` を `http://localhost:8081/` で配信して `node s_basic.js`／`node s_more.js [hold box parry jump boost bumper slime super]`。出力は `tools/howto/out/`（`site/howto/` へコピーし、`ffmpeg -ss 0.6 -i X.mp4 -frames:v 1 -vf scale=300:-2 X.jpg` で表紙画像を作る）。
 - `tools/slime_gen.py`：ぬかるみを床に置いたときのスライム（上から見た図、24px×4コマ）を生成。床に貼り付いた形・飛び散ったしずくと糸・つや・泡。`site/fx/slime.png`。
 - `tools/claude_gen.py`：FX STYLE「CLAUDE」のドット絵（impact 6コマ／smash 7コマ×8方向／goal 10コマ／紙吹雪の＊）を生成。色はパレット番号で `site/fx/claude_*.png` に保存し、FX COLOR で着色する（FX COLOR を CLAUDE にすると暖色の見た目になる）。
 - `tools/smash_gen.py`：SMASH（強打）のドット絵アニメを FX STYLE ごと（ARCADE／KAWAII／WEB90）に生成。7コマ×8方向をそれぞれ描き分け、色はパレット番号で `site/fx/smash_*.png` に保存（FX COLOR・虹色・打った側の色で着色）。
