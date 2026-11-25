@@ -78,7 +78,7 @@ section,h2{scroll-margin-top:86px} /* 目次から飛んだとき固定ヘッダ
     <li>速く振り抜くほど強い球になります。強打は派手なエフェクトが出ます。</li>
   </ul>
   <div class="vid"><video data-src="howto/basic.mp4" poster="howto/basic.jpg" muted playsinline loop preload="none"></video><div class="cap">打ち合い → ゴール</div></div>
-  <p class="note">モード：CPU（よわい／ふつう／つよい）、2P（1台を2人で）、ONLINE（2台で対戦）。画面下の II ボタンで一時停止できます。</p>
+  <p class="note">モード：CPU（よわい／ふつう／つよい）、2P（1台を2人で）、ONLINE（2台で対戦）。画面下の II ボタンで一時停止できます。パックの速さは タイトル → OPTION の <span class="key">PUCK SPEED</span>（50〜150%、標準100%）で変えられます（変わるのはパックだけ）。</p>
 </section>
 
 <section class="card" id="hold">
@@ -109,13 +109,13 @@ section,h2{scroll-margin-top:86px} /* 目次から飛んだとき固定ヘッダ
     <li>相手の速い球が来たら、マレットを構えたまま待ちます。</li>
     <li>パックが当たる <span class="key">直前（0.1秒以内）に指を離す</span> と成立。「キュイーン」と鳴って <span class="key">1秒間</span> 時間が止まります。</li>
     <li>止まっている間に、自分の陣地に指を置いて <span class="key">引っ張って狙い</span>、離すと引っ張った反対の方向へ弾きます。</li>
-    <li>弾いた球は加速しながら飛んでいきます（来た球の1.2倍、2160〜2600）。</li>
+    <li>弾いた球は加速しながら飛んでいきます（来た球の1.2倍、1728〜2080）。</li>
   </ol>
   <div class="vid"><video data-src="howto/parry.mp4" poster="howto/parry.jpg" muted playsinline loop preload="none"></video><div class="cap">停止 → 引っ張って狙う → 発射</div></div>
   <p><b>成立する条件</b></p>
   <ul>
     <li>直前にパックに触ったのが <span class="key">自分ではない</span>（相手の打球など。自分の打球が戻ってきたものは不可）。</li>
-    <li>パックが <span class="key">速い</span>（速さ 1000 以上）。</li>
+    <li>パックが <span class="key">速い</span>（速さ 800 以上）。</li>
   </ul>
   <p class="note">止まっている間に指を置かなければ普通に跳ね返る向きへ、時間切れのときはその時の向きへ弾きます。スーパーシュートの球もパリィで返せます（スタンしません）。CPU はパリィを使いません。受付時間などは開発者画面で変えられます。</p>
 </section>
@@ -134,7 +134,7 @@ section,h2{scroll-margin-top:86px} /* 目次から飛んだとき固定ヘッダ
 <section class="card" id="boost">
   <h3><span class="tag" style="color:#00ffff">BOOST</span>加速床</h3>
   <ul>
-    <li>上を通ったパックを、床の矢印の向きへ <span class="key">一直線に加速</span>（最大 2600）。</li>
+    <li>上を通ったパックを、床の矢印の向きへ <span class="key">一直線に加速</span>（最大 2080）。</li>
     <li>矢印は置いた位置から相手ゴールの方を向きます。打球のコースに置くと一気にゴールへ。</li>
   </ul>
   <div class="vid"><video data-src="howto/boost.mp4" poster="howto/boost.jpg" muted playsinline loop preload="none"></video><div class="cap">加速床を通して一気にゴール</div></div>
@@ -163,7 +163,7 @@ section,h2{scroll-margin-top:86px} /* 目次から飛んだとき固定ヘッダ
   <ol class="steps">
     <li>アイテム欄の <span class="key">キノコをタップ</span> すると、マレットが青いオーラで強化されます（置く必要はありません）。</li>
     <li>強化中にパックに触れると、スローになって <span class="key">構え</span> に入ります（両者とも動けません）。</li>
-    <li>指を引っ張って狙い、離すと引っ張った反対の方向へ <span class="key">最高速（2600）</span> で発射。2.5秒で自動発射。</li>
+    <li>指を引っ張って狙い、離すと引っ張った反対の方向へ <span class="key">最高速（2080）</span> で発射。2.5秒で自動発射。</li>
   </ol>
   <ul>
     <li>青いオーラの球を受けた相手は <span class="key">1.5秒スタン</span> し、球は <span class="key">減速して、必ず打った側のコートへ跳ね返ります</span>。追い打ちのチャンス！</li>
