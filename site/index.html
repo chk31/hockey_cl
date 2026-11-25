@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.27">
+<meta name="version" content="1.28">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.27'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.28'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=200,PR=26,MR=40,MAXV=2100,WIN=7;
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -104,6 +104,7 @@ for(const k in ART){const cv=document.createElement('canvas');cv.width=cv.height
   q.fillStyle='#000';a.forEach((row,y)=>[...row].forEach((ch,x)=>{if(ch!=='.')q.fillRect(x,y,3,3)}));
   a.forEach((row,y)=>[...row].forEach((ch,x)=>{if(ch!=='.'){q.fillStyle=PAL[ch];q.fillRect(x+1,y+1,1,1)}}));SPR[k]=cv}
 const SPR_HI={};
+{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=c.height=24;c.getContext('2d').drawImage(im,0,0,24,24,0,0,24,24);SPR_HI.mud=c};im.src='fx/slime.png'} // ドラッグ中のゴーストも床と同じ絵に
 for(const k in ART_HI){const a=ART_HI[k],n=a.length+2,cv=document.createElement('canvas');cv.width=cv.height=n;const q=cv.getContext('2d');
   q.fillStyle='#000';a.forEach((row,y)=>[...row].forEach((ch,x)=>{if(ch!=='.')q.fillRect(x,y,3,3)}));
   a.forEach((row,y)=>[...row].forEach((ch,x)=>{if(ch!=='.'){q.fillStyle=PAL[ch];q.fillRect(x+1,y+1,1,1)}}));SPR_HI[k]=cv}
@@ -178,7 +179,10 @@ function build3D(){
     ['....WW....','...WWWW...','..WW..WW..','.WW....WW.'].forEach((r,y)=>[...r].forEach((ch,x)=>{if(ch==='W')q.fillRect(x,y+3,1,1)}))},true);
   boostTex.wrapT=THREE.RepeatWrapping;
   const decal=(w,h,map,y)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h).rotateX(-Math.PI/2),toon({map,transparent:true,alphaTest:.5}));m.position.y=y;m.receiveShadow=true;return m};
-  const jt=spriteTex('jump'),mt=tex(26,26,(q)=>q.drawImage(SPR_HI.mud,0,0),true);
+  const jt=spriteTex('jump');
+  // ぬかるみ：tools/slime_gen.py の床に貼り付いたスライム（24px×4コマ）。読み込み後にテクスチャへ描き、コマを送って動かす
+  const slimeCv=document.createElement('canvas');slimeCv.width=96;slimeCv.height=24;const mt=new THREE.CanvasTexture(slimeCv);mt.magFilter=mt.minFilter=THREE.NearestFilter;mt.repeat.set(.25,1);meshes.slimeTex=mt;
+  {const im=new Image();im.onload=()=>{slimeCv.getContext('2d').drawImage(im,0,0);mt.needsUpdate=true};im.src='fx/slime.png'}
   meshes.make={
     jump(){const gr=new THREE.Group(),b=sh(hull(new THREE.Mesh(new THREE.CylinderGeometry(46,50,10,24),toon({color:IT.jump.c}))));b.position.y=5;gr.add(b,decal(92,92,jt,10.6));return gr},
     boost(){const gr=new THREE.Group(),b=sh(hull(new THREE.Mesh(new THREE.BoxGeometry(77,6,140),toon({color:IT.boost.c}))));b.position.y=3;const d=decal(77,140,boostTex,6.6);gr.add(b,d);return gr},
@@ -186,7 +190,7 @@ function build3D(){
       const a=sh(hull(new THREE.Mesh(new THREE.CylinderGeometry(34,36,26,20),toon({color:IT.bumper.c}))));a.position.y=13;
       const b=sh(hull(new THREE.Mesh(new THREE.CylinderGeometry(19,19,30,16),toon({color:0xffffff})),3));b.position.y=15;
       const c=sh(new THREE.Mesh(new THREE.CylinderGeometry(9,9,32,12),toon({color:IT.bumper.c})));c.position.y=16;gr.add(a,b,c);return gr},
-    mud(){const gr=new THREE.Group(),b=sh(new THREE.Mesh(new THREE.CylinderGeometry(60,66,3,24),toon({color:0x33dd33})));b.position.y=1.5;gr.add(b,decal(160,160,mt,3.4));return gr}
+    mud(){const gr=new THREE.Group();gr.add(decal(168,168,mt,.6));return gr} // 床に平らに貼り付く（厚みなし：パックが埋もれない）
   };
   boostTex.repeat.set(1,1.8);
   // ポスト処理：低解像度化＋輪郭線＋ディザで減色
@@ -219,7 +223,7 @@ function render3D(){
     const sup=puck.sup>=0||SUP.aim>=0;for(const m of meshes.puckMats)m.emissive.set(on?0xff0000:sup?(Math.sin(clock*16)>0?0x0077ee:0x003399):0x000000);
     P.forEach((p,i)=>{const u=meshes.mallet[i].userData;u.mA.emissive.set(p.pw?(Math.sin(clock*10)>0?0x0066cc:0x002266):0x000000)});
   }
-  pm.position.set(wx(puck.x),6+lift*380-(puck.inMud?7:0),wz(puck.y));pm.scale.setScalar(1+lift*.5);
+  pm.position.set(wx(puck.x),6+lift*380,wz(puck.y)); // ぬかるみでも沈めない（上でぷるぷる揺れるだけ）pm.scale.setScalar(1+lift*.5);
   if(puck.inMud)pm.rotation.z=Math.sin(clock*25)*.25;else pm.rotation.z=0;
   pm.rotation.x=lift*.5*Math.sign(puck.vy||1);
   P.forEach((p,i)=>{const m=meshes.box[i],b=p.box;m.visible=b.on;if(b.on){m.position.set(wx(b.x),40+Math.round(Math.sin(clock*4)*2)*3,wz(b.y));m.rotation.set(.5,Math.round(b.spin*4)/4,.3)}});
@@ -230,6 +234,7 @@ function render3D(){
     const sy=it.age<.22?1:it.type==='jump'&&it.hit>0?(it.hit>.22?.35:1+it.hit*4):1+it.hit;it.mesh.scale.set(s,sy,s);it.mesh.visible=left>2||Math.floor(it.age*8)%2===0;
   }
   boostTex.offset.y=-Math.floor(clock*20%10)/10;
+  if(meshes.slimeTex)meshes.slimeTex.offset.x=(Math.floor(clock*5)%4)/4; // スライムのコマ送り
   post.uniforms.slow.value=1-ts;post.uniforms.flash.value=flash;post.uniforms.ab.value=ab;post.uniforms.fc.value.set(fcol[0],fcol[1],fcol[2]);
   const sx=(hash(clock*61)-.5)*shake,sz=(hash(clock*37+3)-.5)*shake;cam.position.set(sx,camH,sz);cam.lookAt(sx,0,sz);
   R3.setRenderTarget(rt);R3.render(scene,cam);R3.setRenderTarget(null);R3.render(postScene,postCam);

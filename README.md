@@ -19,7 +19,7 @@
 3. ホームへのスワイプを止めたいときは アクセスガイド（設定 → アクセシビリティ）。
 
 ## バージョン
-- タイトル画面のメニュー枠の右下に `v1.27` のように表示（`site/index.html` の `VER`）。更新のたびに上げる。
+- タイトル画面のメニュー枠の右下に `v1.28` のように表示（`site/index.html` の `VER`）。更新のたびに上げる。
 - 公開ページが最新か迷ったら、この番号で確認する。
 
 ## 実装メモ
@@ -49,6 +49,7 @@
 - ここで変えた設定は確認用で、`<` で抜けると元に戻る。
 
 ## ツール
+- `tools/slime_gen.py`：ぬかるみを床に置いたときのスライム（上から見た図、24px×4コマ）を生成。床に貼り付いた形・飛び散ったしずくと糸・つや・泡。`site/fx/slime.png`。
 - `tools/claude_gen.py`：FX STYLE「CLAUDE」のドット絵（impact 6コマ／smash 7コマ×8方向／goal 10コマ／紙吹雪の＊）を生成。色はパレット番号で `site/fx/claude_*.png` に保存し、FX COLOR で着色する（FX COLOR を CLAUDE にすると暖色の見た目になる）。
 - `tools/smash_gen.py`：SMASH（強打）のドット絵アニメを FX STYLE ごと（ARCADE／KAWAII／WEB90）に生成。7コマ×8方向をそれぞれ描き分け、色はパレット番号で `site/fx/smash_*.png` に保存（FX COLOR・虹色・打った側の色で着色）。
 - `tools/impact_gen.py`：ARCADE の IMPACT（打撃の弾け）のドット絵アニメ（6コマ）を生成。色はパレット番号で `site/fx/impact_idx.png` に保存し、ゲーム側で FX COLOR に合わせて着色する。
