@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.31">
+<meta name="version" content="1.32">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.31'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.32'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=2100,WIN=7;
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -400,7 +400,7 @@ function parryFire(dx,dy){const i=PAR.who;if(i<0)return;puck.lastTouch=i;const l
 function serve(side){live=false;puck.boom=false;puck.sup=-1;puck.par=-1;puck.lastTouch=-1;PAR.who=-1;puck.hold=0;puck.side=side;puck.x=FW/2;puck.y=side===0?MID+170:MID-170;puck.vx=puck.vy=0;puck.air=0;puck.trail=[]}
 function start(m,l){
   if(m)mode=m;if(l!=null)lvl=l;
-  placed.forEach(drop);P=[mk(0),mk(1)];SUP.aim=-1;arm[0]=arm[1]=null;cpu={t:0,tx:FW/2,ty:FY0+85,cd:3,strike:0,stuck:0};
+  placed.forEach(drop);P=[mk(0),mk(1)];SUP.aim=-1;arm[0]=arm[1]=null;cpu={t:0,tx:FW/2,ty:FY0+85,cd:3,strike:0,stuck:0,bank:0,vx:0,vy:0};
   if(mode==='cpu')P[1].maxV=LV[lvl].sp;placed=[];drags.clear();fx.length=0;serve(Math.random()<.5?0:1);state='play';ts=1;
   seq([523,659,784,1047,0,784,1047],.08);
 }
@@ -440,30 +440,42 @@ function place(d){
 /* ================= CPU ================= */
 let mode='cpu',lvl=1;
 const LV=[{n:'よわい',sp:600,re:.34,err:75,cd:10,pw:1,tr:.45},{n:'ふつう',sp:1100,re:.19,err:38,cd:6.5,pw:1.15,tr:.75},{n:'つよい',sp:2700,re:.045,err:5,cd:2.5,pw:1.4,tr:1}];
-let cpu={t:0,tx:FW/2,ty:FY0+85,cd:3,strike:0,stuck:0};
+let cpu={t:0,tx:FW/2,ty:FY0+85,cd:3,strike:0,stuck:0,bank:0,vx:0,vy:0};
 function fold(x){const a=PR,b=FW-PR,w=b-a;const u=((x-a)%(2*w)+2*w)%(2*w);return a+(u>w?2*w-u:u)}
 function cpuDecide(){
   const p=P[1],L=LV[lvl],home={x:FW/2,y:FY0+85};
-  let tx=home.x,ty=home.y;
+  let tx=home.x,ty=home.y,e=1; // e＝狙いのずれの倍率
   const inHalf=puck.y<MID-4&&puck.air===0;
   if(state!=='play'){}
   else if(inHalf){
-    const px=puck.x+puck.vx*.06,py=puck.y+puck.vy*.06;
+    const px=clamp(puck.x+puck.vx*.06,PR,FW-PR),py=Math.max(puck.y+puck.vy*.06,FY0+PR); // 先読み位置（壁の外には出さない）
     cpu.stuck+=L.re;
-    if(puck.y<FY0+MR+PR+8&&Math.hypot(puck.vx,puck.vy)<150){tx=puck.x<FW/2?puck.x+170:puck.x-170;ty=FY0+210}
-    else if(cpu.stuck>1.4){tx=px;ty=py-10}
+    const gx=FW/2+rnd(-70,70)*(lvl===2?1:.5),gy=FY1+40;let dx=gx-px,dy=gy-py;const d=Math.hypot(dx,dy);dx/=d;dy/=d;
+    const bx=px-dx*(MR+PR+6),by=py-dy*(MR+PR+6); // ゴールへ打つためにマレットが入る位置（パックの真後ろ）
+    const touch=puck.x<=PR+3||puck.x>=FW-PR-3||puck.y<=FY0+PR+3; // 壁に接している
+    const pinned=(bx<MR-2||bx>FW-MR+2||by<FY0+MR-2)&&(touch||Math.hypot(puck.vx,puck.vy)<900); // 壁・角に張り付いて真後ろに回れない
+    if(cpu.bank>0){tx=p.x+cpu.vx*150;ty=p.y+cpu.vy*150;e=.3} // 壁打ちの直後：跳ね返ってくるパックの通り道からよける
+    else if(pinned){ // 壁に向かって叩き、跳ね返りで出す（自陣ゴールに向かわない向きを選ぶ）
+      const sw=px<MR*2+PR-4?-1:px>FW-MR*2-PR+4?1:0,bw=py<FY0+MR*2+PR-4;let wx,wy;
+      if(sw&&!bw){wx=sw*.55;wy=.835} // 横の壁：壁に向けて下向きに当てる → 内側・下へ返る
+      else if(sw){wx=px-FW/2;wy=py-(FY0+300);const l=Math.hypot(wx,wy);wx/=l;wy/=l} // 角：角に向けて当てる → 内側へ返る
+      else if(Math.abs(px-FW/2)<GW/2+PR){wx=px<FW/2?-1:1;wy=0} // 自陣ゴールの前：横へ払う
+      else{wx=(px<FW/2?-1:1)*.5;wy=-.866} // 奥の壁：斜め上に当てる → 下へ返る
+      const R=MR+PR+40,sx=clamp(px-wx*R,MR,FW-MR),sy=clamp(py-wy*R,FY0+MR,MID-MR);
+      if(Math.hypot(p.x-sx,p.y-sy)<28){
+        const rx=sw?-wx:wx,ry=bw?-wy:wy;let nx=-ry,ny=rx;const sd=(p.x-px)*nx+(p.y-py)*ny;if(sd<0||(Math.abs(sd)<5&&nx*(FW/2-p.x)<0)){nx=-nx;ny=-ny} // 跳ね返りの線から離れる向き
+        cpu.strike=54/(L.sp*L.pw)+.03;cpu.bank=cpu.strike+.45;cpu.stuck=0;cpu.vx=nx;cpu.vy=ny;tx=px-wx*(MR+PR-14);ty=py-wy*(MR+PR-14) // 打撃はパックの手前で止める
+      }else{tx=sx;ty=sy}
+      e=.3}
+    else if(cpu.stuck>1.4){cpu.strike=.15;cpu.stuck=.7;tx=px;ty=py-10} // 打てない状態が続いたら一度突く（押し続けない）
     else if(py<p.y-6){const side=px<p.x?1:-1;tx=px+side*(MR+PR+16);ty=py-(MR+PR)}
-    else{
-      const gx=FW/2+rnd(-70,70)*(lvl===2?1:.5),gy=FY1+40;let dx=gx-px,dy=gy-py;const d=Math.hypot(dx,dy);dx/=d;dy/=d;
-      const bx=px-dx*(MR+PR+6),by=py-dy*(MR+PR+6);
-      if(Math.hypot(p.x-bx,p.y-by)<24){cpu.strike=.2;cpu.stuck=0;tx=px+dx*(40+30*L.tr);ty=py+dy*(40+30*L.tr)}else{tx=bx;ty=by}
-    }
+    else if(Math.hypot(p.x-bx,p.y-by)<24){cpu.strike=.2;cpu.stuck=0;tx=px+dx*(40+30*L.tr);ty=py+dy*(40+30*L.tr)}else{tx=bx;ty=by}
   }else{
     cpu.stuck=0;
     if(puck.vy<-60&&puck.air===0){const yL=FY0+100,t=(puck.y-yL)/(-puck.vy);tx=FW/2+(fold(puck.x+puck.vx*t)-FW/2)*L.tr;ty=yL}
     else tx=FW/2+(puck.x-FW/2)*.4;
   }
-  cpu.tx=tx+rnd(-L.err,L.err);cpu.ty=ty+rnd(-L.err,L.err)*.5;
+  cpu.tx=tx+rnd(-L.err,L.err)*e;cpu.ty=ty+rnd(-L.err,L.err)*.5*e;
 }
 function cpuItems(dt){
   const p=P[1],L=LV[lvl];cpu.cd-=dt;
@@ -481,7 +493,7 @@ function cpuItems(dt){
 }
 function cpuUpdate(dt){
   if(mode!=='cpu')return;
-  cpu.t-=dt;cpu.strike=Math.max(0,cpu.strike-dt);
+  cpu.t-=dt;cpu.strike=Math.max(0,cpu.strike-dt);cpu.bank=Math.max(0,cpu.bank-dt);
   if(cpu.t<=0&&cpu.strike<=0){cpu.t=LV[lvl].re;cpuDecide()}
   aim(P[1],cpu.tx,cpu.ty);P[1].boost=cpu.strike>0?LV[lvl].pw:1;
   cpuItems(dt);
@@ -1002,6 +1014,11 @@ function sub(h,ms){
       const dx=puck.x-m.x,dy=puck.y-m.y,d=Math.hypot(dx,dy);
       if(d<MR+PR&&d>0){
         const nx=dx/d,ny=dy/d;puck.x=m.x+nx*(MR+PR);puck.y=m.y+ny*(MR+PR);
+        { // 壁・角に押し付けられたパックは壁の外へ出さない（ゴール口以外）。重なった分はマレットを押し戻す
+          const cx=clamp(puck.x,PR,FW-PR),cy=Math.abs(cx-FW/2)<GW/2?puck.y:clamp(puck.y,FY0+PR,FY1-PR);
+          if(cx!==puck.x||cy!==puck.y){puck.x=cx;puck.y=cy;const q=P[m.i],ex=q.x-cx,ey=q.y-cy,ed=Math.hypot(ex,ey)||1;
+            if(ed<MR+PR){q.x=clamp(cx+ex/ed*(MR+PR),MR,FW-MR);q.y=q.i===0?clamp(cy+ey/ed*(MR+PR),MID+MR,FY1-MR):clamp(cy+ey/ed*(MR+PR),FY0+MR,MID-MR)}}
+        }
         if(PAR.who<0&&canParry(P[m.i])&&(puck.vx-m.vx)*nx+(puck.vy-m.vy)*ny<0){parryStart(m.i,nx,ny);return} // パリィ成立 → 時間停止
         if(puck.par>=0)puck.par=-1; // パリィのオーラは次に触れたら消える
         puck.lastTouch=m.i; // 最後にパックに触ったマレット（パリィの条件）
@@ -1606,7 +1623,7 @@ if(window.visualViewport)visualViewport.addEventListener('resize',resizeSoon);
 if(document.fonts&&document.fonts.load){document.fonts.load('20px "Press Start 2P"');document.fonts.load('20px DotGothic16')}
 requestAnimationFrame(loop);
 // 開発・テスト用（?debug のときだけ）：状態の参照と論理座標→画面座標
-if(/[?&]debug/.test(location.search))window.__AH={get SPD(){return SPD},SUP,get PAR(){return PAR},get hitstop(){return hitstop},get shake(){return shake},hit:(...a)=>hit(...a),NET,LOB,get P(){return P},puck,get arm(){return arm},get drags(){return [...drags.values()]},get placed(){return placed},get state(){return state},get mode(){return mode},get live(){return live},get ts(){return ts},get fx(){return fx},get viewFlip(){return viewFlip},
+if(/[?&]debug/.test(location.search))window.__AH={get SPD(){return SPD},get cpu(){return cpu},SUP,get PAR(){return PAR},get hitstop(){return hitstop},get shake(){return shake},hit:(...a)=>hit(...a),NET,LOB,get P(){return P},puck,get arm(){return arm},get drags(){return [...drags.values()]},get placed(){return placed},get state(){return state},get mode(){return mode},get live(){return live},get ts(){return ts},get fx(){return fx},get viewFlip(){return viewFlip},
   scr(x,y){if(viewFlip){x=FW-x;y=TL-y}return rot?{x:VX+OX+y*S,y:VY+OY+(FW-x)*S}:{x:VX+OX+x*S,y:VY+OY+y*S}},give(i,k){P[i].items.push(k)},spawnFx(k,x,y,sc,col,ex){const f=addFx(k,x,y,sc,'',col);if(f&&ex)Object.assign(f,ex);return !!f},setTH(o){Object.assign(TH,o);applyTheme()},rx,pdown,ctl};
 }
 </script>
