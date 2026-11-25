@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.35">
+<meta name="version" content="1.36">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.35'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.36'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=2100,WIN=7;
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -385,9 +385,9 @@ function superClear(){for(const p of P){p.pw=false;p.stun=0}SUP.aim=-1;puck.sup=
    弾いたパックには、パリィした側のフィールドの色のオーラ（縁取りのグラデーション）。スーパーシュートのパックもパリィで返せる（スタンしない） */
 const PAR_A0=.45,PAR_AT=.22; // パリィの発射：目標速度の 0.45 倍から 0.22 秒で加速
 /* パリィの受付時間と止まる時間（秒）。開発者画面で変更でき、端末に保存。実時間で数えるのでゲームスピードとは独立。オンラインはホストの値 */
-const PARC_DEF={w:.04,t:1,s:1000},PARC=Object.assign({},PARC_DEF); // w＝受付時間 t＝止まる時間 s＝パリィできるパックの速さの下限
-try{const v=JSON.parse(localStorage.getItem('ah_parry3')||'{}');if(v.w>=.01&&v.w<=.3)PARC.w=v.w;if(v.t>=.1&&v.t<=2)PARC.t=v.t;if(v.s>=400&&v.s<=2000)PARC.s=v.s}catch(e){} // 初期値を変えたので保存キーを新しくした（v1.33 以前の保存値は使わない）
-function saveParry(){try{localStorage.setItem('ah_parry3',JSON.stringify(PARC))}catch(e){}}
+const PARC_DEF={w:.1,t:1,s:1000},PARC=Object.assign({},PARC_DEF); // w＝受付時間 t＝止まる時間 s＝パリィできるパックの速さの下限
+try{const v=JSON.parse(localStorage.getItem('ah_parry4')||'{}');if(v.w>=.01&&v.w<=.3)PARC.w=v.w;if(v.t>=.1&&v.t<=2)PARC.t=v.t;if(v.s>=400&&v.s<=2000)PARC.s=v.s}catch(e){} // 初期値を変えたので保存キーを新しくした（v1.33 以前の保存値は使わない）
+function saveParry(){try{localStorage.setItem('ah_parry4',JSON.stringify(PARC))}catch(e){}}
 function setParry(k,v){PARC[k]=k==='w'?clamp(Math.round(v*200)/200,.01,.3):k==='s'?clamp(Math.round(v/100)*100,400,2000):clamp(Math.round(v*20)/20,.1,2);saveParry()}
 let PAR={who:-1,t:0,dx:0,dy:-1,sp:2160};
 function canParry(p){if(state!=='play'||p.pw||p.stun>0||p.ptr!=null||!p.relT||(mode==='cpu'&&p.i===1))return false;
@@ -1048,7 +1048,7 @@ function sub(h,ms){
         else if(P[m.i].pw&&SUP.aim<0){superTrigger(m.i);return} // 強化中に触れた → 構えへ
         const rv=(puck.vx-m.vx)*nx+(puck.vy-m.vy)*ny;
         if(rv<0){puck.vx-=1.85*rv*nx;puck.vy-=1.85*rv*ny;hit(m.x+nx*MR,m.y+ny*MR,rcv?Math.min(-rv,600):-rv,'',m.i);if(-rv>250){if(lastHitter!==m.i&&lastHitter>=0){rally++;rallyPop=.4;if(rally%5===0){seq([1047,1319,1568],.05)}}lastHitter=m.i}}
-        if(rcv){const sp=Math.hypot(puck.vx,puck.vy);if(sp>1){puck.vx*=SUP_RCV/sp;puck.vy*=SUP_RCV/sp}else{puck.vx=0;puck.vy=fwd(m.i)*SUP_RCV}} // スーパーシュートを受けたら減速して跳ね返る
+        if(rcv){const sp=Math.hypot(puck.vx,puck.vy),dx=sp>1?clamp(puck.vx/sp,-.6,.6):0;puck.vx=dx*SUP_RCV;puck.vy=fwd(m.i)*Math.sqrt(1-dx*dx)*SUP_RCV} // スーパーシュートを受けたら減速して、必ず打った側（相手コート）へ跳ね返る
       }
     }
     let mud=false;

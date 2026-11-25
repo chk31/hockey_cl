@@ -20,7 +20,7 @@
 3. ホームへのスワイプを止めたいときは アクセスガイド（設定 → アクセシビリティ）。
 
 ## バージョン
-- タイトル画面のメニュー枠の右下に `v1.35` のように表示（`site/index.html` の `VER`）。更新のたびに上げる。
+- タイトル画面のメニュー枠の右下に `v1.36` のように表示（`site/index.html` の `VER`）。更新のたびに上げる。
 - 公開ページが最新か迷ったら、この番号で確認する。
 
 ## 実装メモ
@@ -50,7 +50,7 @@
   盤面の縁・パックの軌跡・スロー演出・スーパーシュートのオーラ・スタン・GOAL!! の装飾を上半分の盤面で確認できる。
 - ここで変えた STYLE／COLOR／LEVEL は確認用で、`<` で抜けると元に戻る。
 - GAME ページ：ITEM JUMP / BOOST / BUMPER / SLIME / SUPER（アイテムボックスから出る重み 0〜10、右に確率％。標準は全部5＝各20％）。保存され、オンラインはホストの値。
-- GAME ページ：PARRY WIN（パリィの受付時間 10〜300ms・5ms刻み、標準 40ms）と PARRY STOP（止まる時間 0.1〜2.0秒、標準 1.0秒）、PARRY SPD（パリィできるパックの速さの下限 400〜2000、標準 1000）はここで変えた値が保存され、ゲームに使われる（ゲームスピードとは独立、オンラインはホストの値）。
+- GAME ページ：PARRY WIN（パリィの受付時間 10〜300ms・5ms刻み、標準 100ms）と PARRY STOP（止まる時間 0.1〜2.0秒、標準 1.0秒）、PARRY SPD（パリィできるパックの速さの下限 400〜2000、標準 1000）はここで変えた値が保存され、ゲームに使われる（ゲームスピードとは独立、オンラインはホストの値）。
 
 ## ツール
 - `tools/howto/`：遊び方ページの動画（`site/howto/*.mp4`）を撮る台本。Playwright でゲームを実際に動かして録画し、ffmpeg で切り出す（指の位置は白い輪で表示）。`cd tools/howto && npm i` のあと、`site/` を `http://localhost:8081/` で配信して `node s_basic.js`／`node s_more.js [hold box parry jump boost bumper slime super]`。出力は `tools/howto/out/`（`site/howto/` へコピーし、`ffmpeg -ss 0.6 -i X.mp4 -frames:v 1 -vf scale=300:-2 X.jpg` で表紙画像を作る）。
