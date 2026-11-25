@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.37">
+<meta name="version" content="1.38">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.37'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.38'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=1680,WIN=7; // MAXV＝パックの最高速（v1.37 で旧ゲームスピード0.8倍を基準＝100%に。パックの速さの値はすべて旧値の0.8倍）
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -692,6 +692,12 @@ function guestUp(id,x,y,type){
   send({t:'pu',id,x,y,c:type==='pointercancel'?1:0});
   if(id===NET.myPtr)NET.myPtr=null;
 }
+/* ゲスト：パックの先読み。壁の反射・減速（摩擦）・ゴール口を含めて t 秒（パックの時間）進める */
+function gPredict(x,y,vx,vy,t){const n=Math.max(1,Math.ceil(t/.008)),h=t/n,f=Math.exp(-.28*h);
+  for(let k=0;k<n;k++){x+=vx*h;y+=vy*h;vx*=f;vy*=f;
+    if(x<PR){x=2*PR-x;vx=Math.abs(vx)*.92}else if(x>FW-PR){x=2*(FW-PR)-x;vx=-Math.abs(vx)*.92}
+    if(Math.abs(x-FW/2)>=GW/2){if(y<FY0+PR){y=2*(FY0+PR)-y;vy=Math.abs(vy)*.92}else if(y>FY1-PR){y=2*(FY1-PR)-y;vy=-Math.abs(vy)*.92}}}
+  return {x,y,vx,vy}}
 /* ---- ゲスト：状態の反映 ---- */
 function applySnap(a){
   if(a.pa){PAR.who=a.pa[0];PAR.t=a.pa[1];PAR.dx=a.pa[2];PAR.dy=a.pa[3];PAR.T=a.pa[4]||.5;puck.par=a.pp}
@@ -728,21 +734,23 @@ function guestUpdate(dt){
   // パック：2スナップ間を線形補間（次が無ければ速度で少しだけ外挿）
   const ox=puck.x,oy=puck.y;let ix,iy;
   if(b&&Math.hypot(b.pk[0]-a.pk[0],b.pk[1]-a.pk[1])<300){ix=L('pk',0);iy=L('pk',1)}
-  else{const e=b?0:clamp(rt-a.ht,0,DMAX)/1000*(state==='play'?1:0)*ts*(a.sp||1);ix=clamp(a.pk[0]+a.pk[2]*e,PR,FW-PR);iy=a.pk[1]+a.pk[3]*e}
+  else{const e=b?0:clamp(rt-a.ht,0,DMAX)/1000*(state==='play'?1:0)*ts*(a.sp||1),q=gPredict(a.pk[0],a.pk[1],a.pk[2],a.pk[3],e);ix=q.x;iy=q.y}
   // 自陣（上半分）では「いまホストに届く入力が当たる位置」まで最新スナップショットから外挿して描く
   // （＝打ってから反応までの遅れを往復時間だけに縮める）。相手陣地は従来どおり補間（相手の打撃を正しく見せる）
   const Z=S[S.length-1],zk=Z.pk,live2=state==='play'&&!zk[9]&&!zk[8];
   let rx=ix,ry=iy;
   if(live2){
     const t=clamp(hnow()+(NET.off||0)+Math.max(0,NET.rtt)-Z.ht,0,120)/1000*Z.ts*(Z.sp||1);
-    let ex=fold(zk[0]+zk[2]*t),ey=zk[1]+zk[3]*t;
-    if(Math.abs(ex-FW/2)>=GW/2){if(ey<FY0+PR)ey=2*(FY0+PR)-ey;if(ey>FY1-PR)ey=2*(FY1-PR)-ey}
-    const w=clamp((MID+60-zk[1])/160,0,1);rx=ix+(ex-ix)*w;ry=iy+(ey-iy)*w;
-  }
+    const q=gPredict(zk[0],zk[1],zk[2],zk[3],t),ex=q.x,ey=q.y;
+    // 補間（相手陣地）→先読み（自陣）の切り替え：中央線の前後240の幅で、時間もかけてなめらかに
+    const u0=clamp((MID+140-zk[1])/240,0,1),wt=u0*u0*(3-2*u0);NET.gw=(NET.gw??wt)+(wt-(NET.gw??wt))*Math.min(1,dt*10);
+    const w=NET.gw;rx=ix+(ex-ix)*w;ry=iy+(ey-iy)*w;
+  }else NET.gw=0
   // 予測が外れたときの飛びは 40ms ほどでなめらかに戻す
   const pr=NET.praw,E=NET.perr||(NET.perr={x:0,y:0});
   if(pr){const dx=rx-(pr.x+zk[2]*dt*Z.ts*(Z.sp||1)),dy=ry-(pr.y+zk[3]*dt*Z.ts*(Z.sp||1));if(Math.hypot(dx,dy)>150){E.x=E.y=0}else{E.x-=dx;E.y-=dy}}
-  NET.praw={x:rx,y:ry};const k=Math.exp(-dt*25);E.x*=k;E.y*=k;
+  NET.praw={x:rx,y:ry};const k=Math.exp(-dt*14);E.x*=k;E.y*=k; // ずれは約70msかけて戻す（急に跳ばない）
+  const el=Math.hypot(E.x,E.y);if(el>90){E.x*=90/el;E.y*=90/el}
   puck.x=rx+E.x;puck.y=ry+E.y;
   // 見た目だけ：自分のマレットにめり込ませない
   const me0=P[1],mdx=puck.x-me0.x,mdy=puck.y-me0.y,md=Math.hypot(mdx,mdy);
