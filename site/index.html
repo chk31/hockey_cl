@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.30">
+<meta name="version" content="1.31">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.30'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.31'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=2100,WIN=7;
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -370,7 +370,7 @@ function superOn(i,slot){const p=P[i];if(p.items[slot]!=='super')return;
 function superTrigger(i){SUP.aim=i;SUP.t=SUP_AIM;SUP.dx=0;SUP.dy=fwd(i);puck.vx=puck.vy=0;puck.sup=-1;
   addFx('wave',puck.x,puck.y,130,'',AURA);juice(8,0,.6,.15,AURA);slide(300,1200,.25,'square',.07)}
 function superAimDir(i){const p=P[i];if(p.ptr==null||p.fx==null)return null;const dx=puck.x-p.fx,dy=puck.y-p.fy,d=Math.hypot(dx,dy);return d<20?null:{dx:dx/d,dy:dy/d}} // 指からパックへの向き＝引っ張りの逆
-function superFire(){const i=SUP.aim;if(i<0)return;const a=superAimDir(i)||{dx:SUP.dx,dy:SUP.dy};SUP.aim=-1;P[i].pw=false;
+function superFire(){const i=SUP.aim;if(i<0)return;puck.lastTouch=i;const a=superAimDir(i)||{dx:SUP.dx,dy:SUP.dy};SUP.aim=-1;P[i].pw=false;
   puck.vx=a.dx*SUP_SP;puck.vy=a.dy*SUP_SP;puck.boostT=.9;puck.sup=i;puck.supT=2.5;puck.land=0;
   addFx('speed',puck.x,puck.y,1);addFx('impact',puck.x,puck.y,90,'',AURA);juice(14,.06,.9,.25,AURA);slide(500,2000,.18,'sawtooth',.07);noise(.2,.1)}
 function stunP(i){const p=P[i];p.stun=STUN;addFx('impact',p.x,p.y,80,'',AURA);addFx('wave',p.x,p.y,100,'',AURA);juice(10,.05,.6,.2,AURA);noise(.3,.12);seq([400,300,200],.06,'square',.06)}
@@ -380,11 +380,12 @@ function superClear(){for(const p of P){p.pw=false;p.stun=0}SUP.aim=-1;puck.sup=
    弾いたパックには、パリィした側のフィールドの色のオーラ（縁取りのグラデーション）。スーパーシュートのパックもパリィで返せる（スタンしない） */
 const PAR_SWIPE=50;
 /* パリィの受付時間と止まる時間（秒）。開発者画面で変更でき、端末に保存。実時間で数えるのでゲームスピードとは独立。オンラインはホストの値 */
-const PARC={w:.1,t:.5};
-try{const v=JSON.parse(localStorage.getItem('ah_parry')||'{}');if(v.w>=.03&&v.w<=.3)PARC.w=v.w;if(v.t>=.1&&v.t<=2)PARC.t=v.t}catch(e){}
-function setParry(k,v){PARC[k]=k==='w'?clamp(Math.round(v*100)/100,.03,.3):clamp(Math.round(v*20)/20,.1,2);try{localStorage.setItem('ah_parry',JSON.stringify(PARC))}catch(e){}}
+const PARC={w:.1,t:.5,s:1000}; // s＝パリィできるパックの速さの下限
+try{const v=JSON.parse(localStorage.getItem('ah_parry')||'{}');if(v.w>=.03&&v.w<=.3)PARC.w=v.w;if(v.t>=.1&&v.t<=2)PARC.t=v.t;if(v.s>=400&&v.s<=2000)PARC.s=v.s}catch(e){}
+function setParry(k,v){PARC[k]=k==='w'?clamp(Math.round(v*100)/100,.03,.3):k==='s'?clamp(Math.round(v/100)*100,400,2000):clamp(Math.round(v*20)/20,.1,2);try{localStorage.setItem('ah_parry',JSON.stringify(PARC))}catch(e){}}
 let PAR={who:-1,t:0,ptr:null,sx:0,sy:0,dx:0,dy:-1,sp:1800};
 function canParry(p){if(state!=='play'||p.pw||p.stun>0||p.ptr!=null||!p.relT||(mode==='cpu'&&p.i===1))return false;
+  if(puck.lastTouch===p.i||Math.hypot(puck.vx,puck.vy)<PARC.s)return false; // 直前に触ったのが自分なら不可／遅いパックは不可
   return (hnow()-p.relT)/1000<=PARC.w+(p.relRemote?.03:0)} // ゲストは届く揺れぶん少しだけ広く
 function parryStart(i,nx,ny){
   const sp0=Math.hypot(puck.vx,puck.vy),vn=puck.vx*nx+puck.vy*ny;let rx=puck.vx-2*vn*nx,ry=puck.vy-2*vn*ny,rl=Math.hypot(rx,ry); // 普通に跳ね返った向き（スワイプしなかったとき用）
@@ -393,10 +394,10 @@ function parryStart(i,nx,ny){
   puck.vx=puck.vy=0;puck.sup=-1;puck.par=-1;P[i].relT=0;
   addFx('wave',puck.x,puck.y,140,'',COL[i]);addFx('impact',puck.x,puck.y,70,'',COL[i]);juice(10,0,.8,.35,COL[i]);
   slide(280,2600,.3,'sawtooth',.07);slide(560,3400,.34,'square',.04);beep(2637,.14,'triangle',.06,.3)} // キュイーン：上がっていくうなり＋高い余韻
-function parryFire(dx,dy){const i=PAR.who;if(i<0)return;const l=Math.hypot(dx,dy)||1;PAR.who=-1;
+function parryFire(dx,dy){const i=PAR.who;if(i<0)return;puck.lastTouch=i;const l=Math.hypot(dx,dy)||1;PAR.who=-1;
   puck.vx=dx/l*PAR.sp;puck.vy=dy/l*PAR.sp;puck.boostT=.9;puck.par=i;puck.parT=2;puck.land=0;
   {const f=addFx('speed',puck.x,puck.y,1);if(f){f.nx=dx/l;f.ny=dy/l}}addFx('impact',puck.x,puck.y,90,'',COL[i]);juice(14,.05,.9,.2,COL[i]);slide(500,2200,.16,'square',.07);noise(.18,.1)}
-function serve(side){live=false;puck.boom=false;puck.sup=-1;puck.par=-1;PAR.who=-1;puck.hold=0;puck.side=side;puck.x=FW/2;puck.y=side===0?MID+170:MID-170;puck.vx=puck.vy=0;puck.air=0;puck.trail=[]}
+function serve(side){live=false;puck.boom=false;puck.sup=-1;puck.par=-1;puck.lastTouch=-1;PAR.who=-1;puck.hold=0;puck.side=side;puck.x=FW/2;puck.y=side===0?MID+170:MID-170;puck.vx=puck.vy=0;puck.air=0;puck.trail=[]}
 function start(m,l){
   if(m)mode=m;if(l!=null)lvl=l;
   placed.forEach(drop);P=[mk(0),mk(1)];SUP.aim=-1;arm[0]=arm[1]=null;cpu={t:0,tx:FW/2,ty:FY0+85,cd:3,strike:0,stuck:0};
@@ -836,7 +837,7 @@ function drawPauseBtn(p){ // ‖ アイコン（文字なし）
 const DEV={saved:null,last:'burst',loop:false,loopT:0,move:true,fast:false,slow:false,aura:false,stun:false,goal:false,a:0};
 const DEV_FX=['impact','imp-wall','imp-tiny','wave','smash','speed','mud-in','mud-out','mud-bub','mud-drop','goal','spawn','fly','stop'];
 const DEV_TG=['ALL','LOOP','MOVE','FAST','SLOW','AURA','STUN','GOAL','PARRY'];
-const DEV_ROWS=[['st','FX STYLE'],['fx','FX COLOR'],['lv','FX LEVEL'],['pw','PARRY WIN'],['pt','PARRY STOP']],devRowY=k=>MID+56+k*36,DEV_GY=MID+240,devCell=k=>({x:30+(k%4)*135+4,y:DEV_GY+Math.floor(k/4)*42+2,w:127,h:38});
+const DEV_ROWS=[['st','FX STYLE'],['fx','FX COLOR'],['lv','FX LEVEL'],['pw','PARRY WIN'],['pt','PARRY STOP'],['ps','PARRY SPD']],devRowY=k=>MID+54+k*34,DEV_GY=MID+262,devCell=k=>({x:30+(k%4)*135+4,y:DEV_GY+Math.floor(k/4)*38+2,w:127,h:34});
 function enterDev(){DEV.saved=Object.assign({},TH);state='dev';fx.length=0;Object.assign(DEV,{loop:false,slow:false,aura:false,stun:false,goal:false,move:true,fast:false});P=[mk(0),mk(1)];beep(1320,.06);beep(1760,.06,'square',.06,.07)}
 function exitDev(){Object.assign(TH,DEV.saved||TH);applyTheme();fx.length=0;drags.delete('dev');P=[mk(0),mk(1)];puck.sup=-1;Object.assign(puck,{x:FW/2,y:MID,vx:0,vy:0,trail:[]});ts=1;state='options';beep(660,.05)}
 function devFire(k){
@@ -869,8 +870,8 @@ function devUpdate(dt){
 }
 function devTap(l){
   if(inR(l,{x:36,y:MID+14,w:60,h:38})){exitDev();return}
-  DEV_ROWS.forEach(([key],k)=>{const y=devRowY(k);if(l.v<y||l.v>y+34)return;
-    if(key==='pw'||key==='pt'){const d=l.u>160&&l.u<230?-1:l.u>370&&l.u<440?1:0;if(d){setParry(key==='pw'?'w':'t',key==='pw'?PARC.w+d*.01:PARC.t+d*.05);beep(d<0?520:780,.04)}return}
+  DEV_ROWS.forEach(([key],k)=>{const y=devRowY(k);if(l.v<y||l.v>y+30)return;
+    if(key==='pw'||key==='pt'||key==='ps'){const d=l.u>160&&l.u<230?-1:l.u>370&&l.u<440?1:0;if(d){if(key==='ps')setParry('s',PARC.s+d*100);else setParry(key==='pw'?'w':'t',key==='pw'?PARC.w+d*.01:PARC.t+d*.05);beep(d<0?520:780,.04)}return}
     const n=THEMES[key].length;
     if(l.u>160&&l.u<230){TH[key]=(TH[key]+n-1)%n;applyTheme();beep(520,.04)}else if(l.u>370&&l.u<440){TH[key]=(TH[key]+1)%n;applyTheme();beep(780,.04)}});
   const all=DEV_FX.concat(DEV_TG);all.forEach((k,n)=>{if(!inR(l,devCell(n)))return;beep(880,.03);
@@ -884,8 +885,8 @@ function drawDev(){
   frame(0,()=>{pbox(20,MID+8,FW-40,FL/2-12,YEL);ptext('DEV',FW/2,MID+32,18,YEL);ptext('v'+VER,FW-40,MID+32,8,'#777',PIX,'right');
     pbox(36,MID+14,60,38,'#666');ptext('<',66,MID+34,16,'#fff');
     DEV_ROWS.forEach(([key,lab],k)=>{const y=devRowY(k);ptext(lab,40,y+17,8,'#888',PIX,'left');
-      for(const [x,ch] of [[160,'<'],[370,'>']]){pbox(x,y,70,32,'#666');ptext(ch,x+35,y+18,14,'#fff')}
-      ptext(key==='pw'?PARC.w.toFixed(2)+'s':key==='pt'?PARC.t.toFixed(2)+'s':THEMES[key][TH[key]].n,FW/2,y+18,11,key==='pw'||key==='pt'?YEL:'#fff')});
+      for(const [x,ch] of [[160,'<'],[370,'>']]){pbox(x,y,70,30,'#666');ptext(ch,x+35,y+17,14,'#fff')}
+      const num=key==='pw'||key==='pt'||key==='ps';ptext(key==='pw'?PARC.w.toFixed(2)+'s':key==='pt'?PARC.t.toFixed(2)+'s':key==='ps'?String(PARC.s):THEMES[key][TH[key]].n,FW/2,y+17,11,num?YEL:'#fff')});
     const on={LOOP:DEV.loop,MOVE:DEV.move,FAST:DEV.fast,SLOW:DEV.slow,AURA:DEV.aura,STUN:DEV.stun,GOAL:DEV.goal,PARRY:DEV.parry};
     DEV_FX.concat(DEV_TG).forEach((k,n)=>{const r=devCell(n),tg=k in on,act=tg?on[k]:k===DEV.last;
       pbox(r.x,r.y,r.w,r.h,act?(tg?YEL:'#fff'):(tg?'#555':'#777'),act&&tg?'#332':'#000');ptext(k.toUpperCase(),r.x+r.w/2,r.y+r.h/2+2,9,k==='stop'&&!minimal()?'#555':'#fff')});
@@ -1003,6 +1004,7 @@ function sub(h,ms){
         const nx=dx/d,ny=dy/d;puck.x=m.x+nx*(MR+PR);puck.y=m.y+ny*(MR+PR);
         if(PAR.who<0&&canParry(P[m.i])&&(puck.vx-m.vx)*nx+(puck.vy-m.vy)*ny<0){parryStart(m.i,nx,ny);return} // パリィ成立 → 時間停止
         if(puck.par>=0)puck.par=-1; // パリィのオーラは次に触れたら消える
+        puck.lastTouch=m.i; // 最後にパックに触ったマレット（パリィの条件）
         if(puck.sup>=0){if(puck.sup!==m.i)stunP(m.i);puck.sup=-1} // スーパーシュートを受け止めた相手はスタン
         else if(P[m.i].pw&&SUP.aim<0){superTrigger(m.i);return} // 強化中に触れた → 構えへ
         const rv=(puck.vx-m.vx)*nx+(puck.vy-m.vy)*ny;
