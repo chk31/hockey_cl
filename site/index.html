@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.39">
+<meta name="version" content="1.40">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.39'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.40'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=1680,WIN=7; // MAXV＝パックの最高速（v1.37 で旧ゲームスピード0.8倍を基準＝100%に。パックの速さの値はすべて旧値の0.8倍）
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -327,7 +327,7 @@ function slide(...a){relay(['s','slide',a]);if(!rctx)_slide(...a)}
    goal   : ゴール演出（大きな演出＋紙吹雪）
    spawn  : アイテムボックス出現
    fly    : 取ったアイテムが欄へ飛ぶ（txt＝アイテム種類） */
-const FX_LIFE={impact:.45,wave:.5,smash:.6,speed:.4,mud:.6,goal:2.2,spawn:.7,fly:.5};
+const FX_LIFE={impact:.45,wave:.5,smash:.6,speed:.4,mud:.6,goal:2.2,spawn:.7,fly:.5,early:.75};
 const MUD_LIFE={in:.6,out:.6,bub:.7,drop:1.4};
 function addFx(k,x,y,s=1,txt='',col=YEL){
   const o=addFx0(k,x,y,s,txt,col);
@@ -336,7 +336,7 @@ function addFx(k,x,y,s=1,txt='',col=YEL){
 }
 function addFx0(k,x,y,s=1,txt='',col=YEL){
   if(k==='stop'&&!minimal())return null; // ヒットストップの合図は MIN 専用
-  if(minimal()&&k!=='fly'&&k!=='stop')return null; // MIN：アイテムが欄に飛ぶ表示とヒットストップの合図だけ
+  if(minimal()&&k!=='fly'&&k!=='stop'&&k!=='early')return null; // MIN：アイテムが欄に飛ぶ表示とヒットストップの合図だけ
   if(lite()){ // LITE：流線・出現・ぬかるみの泡やしずく・小さな火花は出さない。弾け・輪は小さく、弾けは同時2つまで
     if(k==='speed'||k==='spawn'||(k==='mud'&&txt!=='in')||(k==='impact'&&s<24))return null;
     if(k==='impact'&&fx.filter(f=>f.k==='impact').length>=2)return null;if(k==='impact'||k==='wave')s*=.6}
@@ -380,7 +380,7 @@ function explode(side){
    アイテム欄でタップ → 自機が青いオーラの強化状態に。強化中にパックへ触れるとスロー＋パック停止 → 引っ張って狙い、離すと発射。
    引っ張った方向の逆へ、加速床の最高速で飛ぶ。発射・得点で強化解除。青いオーラのパックを受けた相手は1.5秒スタン */
 const STOP_MV=.4; // 構え・パリィ停止中に守る側が動ける速さ（倍率）
-const AURA='#33ccff',SUP_SP=2080,SUP_AIM=1.5,STUN=1.5,SUP_RCV=336; // SUP_RCV＝受けたパックが跳ね返る速さ（遅く返して打った側のチャンスに）
+const AURA='#33ccff',SUP_SP=2080,SUP_AIM=2.5,STUN=1.5,SUP_RCV=336; // SUP_RCV＝受けたパックが跳ね返る速さ（遅く返して打った側のチャンスに）
 let SUP={aim:-1,t:0,dx:0,dy:-1};
 function superOn(i,slot){const p=P[i];if(p.items[slot]!=='super')return;
   if(p.pw){flashSlot(p,'#666',.3,slot);beep(150,.1,'square',.06);return} // もう強化中
@@ -406,11 +406,12 @@ let PAR={who:-1,t:0,dx:0,dy:-1,sp:2160};
 function canParry(p){if(state!=='play'||p.pw||p.stun>0||p.ptr!=null||!p.relT||(mode==='cpu'&&p.i===1))return false;
   if(puck.lastTouch===p.i||Math.hypot(puck.vx,puck.vy)<PARC.s)return false; // 直前に触ったのが自分なら不可／遅いパックは不可
   return (hnow()-p.relT)/1000<=PARC.w+(p.relRemote?.03:0)} // ゲストは届く揺れぶん少しだけ広く
-/* パリィを狙ったらしいが早く離しすぎたとき（受付時間を過ぎていて 0.35 秒以内）：短い「ブッ」と灰色の小さな輪で知らせる */
+/* パリィを狙ったらしいが早く離しすぎたとき（受付時間を過ぎてから EARLY_W 秒以内。受付時間の設定を変えても同じ幅で出る）：「ブッブー」と EARLY の表示で知らせる */
+const EARLY_W=.3;
 function parryEarly(p){if(state!=='play'||p.pw||p.stun>0||p.ptr!=null||!p.relT||(mode==='cpu'&&p.i===1))return false;
   if(puck.lastTouch===p.i||Math.hypot(puck.vx,puck.vy)<PARC.s)return false;
-  const age=(hnow()-p.relT)/1000;return age>PARC.w+(p.relRemote?.03:0)&&age<=.35}
-function earlyCue(p){p.relT=0;addFx('wave',p.x,p.y,52,'','#9a9aa6');addFx('impact',p.x,p.y,10,'','');slide(480,150,.13,'square',.07);beep(110,.06,'sawtooth',.05)}
+  const age=(hnow()-p.relT)/1000,w=PARC.w+(p.relRemote?.03:0);return age>w&&age<=w+EARLY_W}
+function earlyCue(p){p.relT=0;addFx('early',p.x,p.y,1,'','#b8b8c8');beep(392,.06,'square',.07);beep(196,.15,'square',.07,.07)}
 function parryStart(i,nx,ny){
   const sp0=Math.hypot(puck.vx,puck.vy),vn=puck.vx*nx+puck.vy*ny;let rx=puck.vx-2*vn*nx,ry=puck.vy-2*vn*ny,rl=Math.hypot(rx,ry); // 普通に跳ね返った向き（スワイプしなかったとき用）
   if(rl<1){rx=nx;ry=ny;rl=1}
@@ -1423,6 +1424,13 @@ function fxViews(f){const v=o=>Object.assign(Object.create(f),o);
   case 'goal':{const r=[];if(f.t<1.6)r.push(v({k:'big',life:1.6}));if(!lite())r.push(v({k:'confetti',life:f.life,x:FW/2,y:MID}));return r}
   case 'spawn':return [v({k:'beam'})];
   default:return [f]}} // smash, fly
+function drawEarly(f){ // パリィの早すぎ：灰色の輪が割れて散る＋「EARLY」が浮かぶ
+  const p=f.t/f.life,R=MR+8+eOut(p)*26,n=12,fr=Math.floor(f.t*24);
+  for(let k=0;k<n;k++){if((k+fr)%4===0&&p>.3)continue;const a=f.a0+k/n*6.2832,x=f.x+Math.cos(a)*R,y=f.y+Math.sin(a)*R,s=snap(12*(1-p)+4,3);sq(x,y,s+6,'#000');sq(x,y,s,k%2?'#8a8a98':'#d8d8e4')}
+  if(p<.35){const s=snap(MR*2*(1-p*2),3);g.globalAlpha=.55*(1-p/.35);sq(f.x,f.y,s,'#c8c8d8');g.globalAlpha=1} // マレットが一瞬灰色に光る
+  frame(f.i,()=>{const l=local(f.i,f.x,f.y),dy=-MR-62-eOut(Math.min(1,p*2))*24;g.globalAlpha=p>.75?(1-p)/.25:1;
+    ptext('EARLY',l.u,l.v+dy,24,'#f0f0ff');g.globalAlpha=1});
+}
 function drawFx(f){
   if(f.k==='stop'){drawStop(f);return}
   if(claudeS()&&(f.k==='impact'||f.k==='smash'||f.k==='goal')&&drawClaude(f))return;
@@ -1640,7 +1648,8 @@ function drawUI(){
     frame(puck.side,()=>{const l=local(puck.side,puck.x,puck.y);ptext(String(Math.ceil(rem)),l.u,l.v-PR-42,22,warn?'#ff0055':'#fff')});}
   slowRays();
   drawSuper();
-  for(const f of fx)drawFx(f);
+  for(const f of fx)if(f.k!=='early')drawFx(f);
+  for(const f of fx)if(f.k==='early')drawEarly(f); // パリィの早すぎは打撃のエフェクトより上に描く
   marquee();
   P.forEach(tray);
   ghosts();
