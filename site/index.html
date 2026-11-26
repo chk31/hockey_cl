@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.42">
+<meta name="version" content="1.43">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.42'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.43'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=1680,WIN=7; // MAXV＝パックの最高速（v1.37 で旧ゲームスピード0.8倍を基準＝100%に。パックの速さの値はすべて旧値の0.8倍）
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -611,8 +611,8 @@ function bossContinue(){const B=BOSS,ph=B.phase,hp=[0,10,6,3][ph],lives=BOSSC.li
 function useRestore(i,s){const B=BOSS,p=P[i];p.items.splice(s,1);SPD=B.spd0;B.hold2=false;GWB=GW;B.tilt=false;B.slotX=[0,0];B.rw=[];bossField();bossFlinch(3,'RESTORE!');
   addFx('wave',FW/2,MID,400,'','#ffffff');juice(24,.12,1.4,.8,'#ffffff');_seq([523,659,784,1047,1319,1568,2093],.06,'square',.07)}
 const holdLim=side=>BOSS.on&&BOSS.hold2&&side===0?BOSSC.hold:HOLD;
-const BTN=[{x:70,w:140,m:'cpu',l:0},{x:230,w:140,m:'cpu',l:1},{x:390,w:140,m:'cpu',l:2},{x:70,w:140,m:'2p',l:null},{x:230,w:140,m:'net',l:null},{x:390,w:140,m:'opt',l:null},{x:70,w:460,m:'boss',l:null}];
-const TY0=MID+40,BH=72,btnY=b=>b.m==='cpu'?TY0+108:b.m==='boss'?TY0+292:TY0+200;
+const BTN=[{x:60,w:124,m:'cpu',l:0},{x:192,w:124,m:'cpu',l:1},{x:324,w:124,m:'cpu',l:2},{x:458,w:82,m:'boss',l:null},{x:60,w:152,m:'2p',l:null},{x:224,w:152,m:'net',l:null},{x:388,w:152,m:'opt',l:null}]; // 巻物＝ボス
+const TY0=MID+40,BH=72,btnY=b=>b.m==='cpu'||b.m==='boss'?TY0+108:TY0+200;
 const HOWB={x:56,y:TY0+14,w:56,h:46}; // タイトルの「？」＝遊び方ページへ
 
 /* ================= オンライン対戦（P2P / PeerJS・ホスト権威型） =================
@@ -1134,7 +1134,8 @@ function wall(x,y,sp){hit(x,y,sp,'',-1,x<=0?[1,0]:x>=FW?[-1,0]:y<=FY0?[0,1]:[0,-
 function bumperHit(it,r){
   const v=bounceOff(it.x,it.y,r,1.25);if(v&&puck.sup>=0)breakItem(it); // スーパーシュート：跳ね返したあと壊れる
   if(v&&it.mega&&!it.dead){if(puck.par>=0||puck.boostT>0)it.hp=0;else it.hp--;if(it.hp<=0){breakItem(it);if(!placed.some(q=>q.mega&&!q.dead))bossFlinch(2,'壁がこわれた!')}} // メガバンパー：パリィ・加速ショットなら一発
-  if(v){puck.paT=0;const sp=Math.hypot(puck.vx,puck.vy);if(sp<1){const nx=(puck.x-it.x)/(r+PR),ny=(puck.y-it.y)/(r+PR);puck.vx=nx*480;puck.vy=ny*480}else if(sp<480){puck.vx*=480/sp;puck.vy*=480/sp}it.hit=.25;seq([1568,2093],.04,'square',.06);hit(puck.x,puck.y,Math.max(v,400),'');juice(10,.04,.8,.15,'#aa55ff');addFx('wave',it.x,it.y,80,'','#aa55ff')}
+  if(v){puck.paT=0;if(BOSS.on)puck.lastTouch=-1; // ボス戦：バンパーで跳ね返った球もパリィできる
+    const sp=Math.hypot(puck.vx,puck.vy);if(sp<1){const nx=(puck.x-it.x)/(r+PR),ny=(puck.y-it.y)/(r+PR);puck.vx=nx*480;puck.vy=ny*480}else if(sp<480){puck.vx*=480/sp;puck.vy*=480/sp}it.hit=.25;seq([1568,2093],.04,'square',.06);hit(puck.x,puck.y,Math.max(v,400),'');juice(10,.04,.8,.15,'#aa55ff');addFx('wave',it.x,it.y,80,'','#aa55ff')}
   return v;
 }
 /* スーパーシュートで設置物が壊れる（印を付けて substep の最後に取り除く） */
@@ -1199,7 +1200,7 @@ function sub(h,ms){
         // 床の向きにスナップして一直線に射出、横ずれはレールのように中心線へ寄せる
         const across=dx*-it.dy+dy*it.dx,sp=Math.min(Math.max(Math.hypot(puck.vx,puck.vy)*1.25,1280),2080);
         puck.x-=-it.dy*across*.35;puck.y-=it.dx*across*.35;
-        puck.vx=it.dx*sp;puck.vy=it.dy*sp;puck.boostT=.875;puck.paT=0;
+        puck.vx=it.dx*sp;puck.vy=it.dy*sp;puck.boostT=.875;puck.paT=0;if(BOSS.on&&!it.boss)puck.lastTouch=-1; // ボス戦：加速床を通った球はだれの球でもない（パリィできる）
         if(it.hit<=0){slide(600,1800,.14,'sawtooth',.05);addFx('speed',puck.x,puck.y,1);juice(8,.04,1,.1,'#00ffff')}it.hit=.15;
       }else if(it.type==='bumper'){bumperHit(it,r)
       }else if(it.type==='mud'&&Math.hypot(dx,dy)<r){if(puck.sup>=0){mud=true;breakItem(it);continue} // スーパーシュート：減速してから壊れる
@@ -1758,13 +1759,13 @@ function drawUI(){
   ghosts();
   if(state==='title'){
     g.fillStyle='rgba(0,0,0,.6)';g.fillRect(-40,FY0,FW+80,FL);
-    frame(0,()=>{pbox(36,TY0,FW-72,390,COL[0]);
-      ptext('AIR HOCKEY',FW/2,TY0+58,34,YEL);ptext('v'+VER,FW-48,TY0+376,8,'#777',PIX,'right');
+    frame(0,()=>{pbox(36,TY0,FW-72,300,COL[0]);
+      ptext('AIR HOCKEY',FW/2,TY0+58,34,YEL);ptext('v'+VER,FW-48,TY0+286,8,'#777',PIX,'right');
       pbox(HOWB.x,HOWB.y,HOWB.w,HOWB.h,'#888');ptext('?',HOWB.x+HOWB.w/2,HOWB.y+HOWB.h/2+2,20,YEL);ptext('あそびかた',HOWB.x+HOWB.w/2,HOWB.y+HOWB.h+12,10,'#aaa',DOT);
       BTN.forEach(b=>{const y=btnY(b),hl=b.m!=='opt'&&b.m!=='net'&&b.m===mode&&(b.l==null||b.l===lvl);pbox(b.x,y,b.w,BH,hl?(blink(2)?YEL:'#fff'):'#666',hl?'#1a1a1a':'#000');
         if(b.m==='2p')ptext('2P',b.x+b.w/2,y+BH/2+2,20,'#fff');
         else if(b.m==='opt')ptext('OPTION',b.x+b.w/2,y+BH/2+2,14,'#fff');
-        else if(b.m==='boss'){const bb=bossBest();ptext('BOSS',b.x+b.w/2-60,y+BH/2+2,20,'#ff0055');ptext('NULL',b.x+b.w/2+60,y+BH/2-8,12,'#ddd');ptext(bb.clear?'★ '+bb.best.toFixed(1)+'s':'ルールを盗むボス',b.x+b.w/2+60,y+BH/2+16,bb.clear?9:10,bb.clear?YEL:'#888',bb.clear?PIX:DOT)}
+        else if(b.m==='boss'){const cx=b.x+b.w/2,cy=y+30;drawScroll(cx,cy);ptext('BOSS',cx,y+60,8,'#ff3366');if(bossBest().clear)ptext('★',b.x+b.w-12,y+12,10,YEL)}
         else if(b.m==='net')ptext('ONLINE',b.x+b.w/2,y+BH/2+2,14,window.Peer?'#fff':'#555');
         else{ptext('CPU',b.x+b.w/2,y+26,16,'#fff');for(let k=0;k<3;k++){const px=b.x+b.w/2+(k-1)*22;g.fillStyle='#000';g.fillRect(px-8,y+46,16,12);g.fillStyle=k<=b.l?[YEL,'#ffaa00','#ff0055'][b.l]:'#333';g.fillRect(px-6,y+48,12,8)}}});
     });
@@ -1787,6 +1788,13 @@ function drawUI(){
     frame(me,()=>ptext(String(r)+(NET.path==='relay'?' R':''),FW-20,FY1+TRAY+18,8,r<60?'#55ff55':r<120?YEL:'#ff0055',PIX,'right'))}
 }
 /* ---- ボス戦の表示 ---- */
+function drawScroll(x,y){ // 巻物のドット絵（タイトルのボスの入口）
+  g.fillStyle='#000';g.fillRect(x-25,y-15,50,30);
+  g.fillStyle='#e8d8a8';g.fillRect(x-18,y-11,36,22);g.fillStyle='#c8b080';g.fillRect(x-18,y+7,36,4);
+  for(const sx of [-1,1]){g.fillStyle='#8a5a2a';g.fillRect(x+sx*22-4,y-14,8,28);g.fillStyle='#c08040';g.fillRect(x+sx*22-2,y-12,4,24)}
+  g.fillStyle='#ff0055';g.fillRect(x-5,y-5,10,10);g.fillStyle='#ffffff';g.fillRect(x-2,y-2,4,4); // 封印
+  g.fillStyle='#6a5a3a';for(let k=0;k<3;k++)g.fillRect(x-14,y-8+k*5,7,2),g.fillRect(x+7,y-8+k*5,7,2);
+}
 function bossIcon(k,x,y){
   if(k==='twin'){spr('boost',x-13,y,30,1);spr('boost',x+13,y,30,1)}
   else if(k==='wall'){spr('bumper',x,y,42,1)}
