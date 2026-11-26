@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.54">
+<meta name="version" content="1.55">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.54'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.55'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=1680,WIN=7; // MAXV＝パックの最高速（v1.37 で旧ゲームスピード0.8倍を基準＝100%に。パックの速さの値はすべて旧値の0.8倍）
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -330,76 +330,58 @@ function _slide(f0,f1,d,type='square',v=.06){if(!ac)return;try{const o=ac.create
 
 /* オンライン（ホスト）では音をゲストへも転送する。rctx＝ゲストの操作を処理中（ホスト側では鳴らさない） */
 
-/* ================= 効果音（電子音のシンセ）=================
-   方針（桜井スキル #032／#089 ほか）：勝敗への影響が大きい音ほど目立たせる（ゴール＞パリィ＞スマッシュ＞打撃＞スーパー＞ポスト＞壁＞アイテム）。
-   打撃はアタックを強く・残響はほどほど。強打はヒットストップの間に主要部を鳴らし終える。同じ音の連打は音程を少しばらつかせる。
-   部品：tone（発振器2つを少しずらして厚み・音程の変化・ビブラート・ローパス）、nz（ノイズを帯域で絞ったアタック／風）。
-   全体はミキサー（コンプレッサー）でまとめて割れないようにし、短い残響（スラップ）を少しだけ送る。左右はパックの横位置で振る。 */
-let MB=null,NZB=null;
-function bus(){if(MB||!ac)return MB;try{const comp=ac.createDynamicsCompressor();comp.threshold.value=-16;comp.knee.value=10;comp.ratio.value=5;comp.attack.value=.002;comp.release.value=.14;
-  const mg=ac.createGain();mg.gain.value=1;comp.connect(mg).connect(ac.destination);
-  const dl=ac.createDelay(.3);dl.delayTime.value=.062;const fb=ac.createGain();fb.gain.value=.3;const lp=ac.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2400;const wet=ac.createGain();wet.gain.value=.5;
-  dl.connect(lp);lp.connect(fb).connect(dl);lp.connect(wet).connect(comp);
-  const n=ac.sampleRate,b=ac.createBuffer(1,n,n),d=b.getChannelData(0);for(let k=0;k<n;k++)d[k]=Math.random()*2-1;NZB=b;
-  MB={in:comp,send:dl}}catch(e){MB=null}return MB}
-const panX=x=>x==null?0:clamp((viewFlip?FW-x:x)/FW*2-1,-1,1)*.65; // パックの横位置 → 左右
-function outTo(node,o,t,end){const b=MB;let n=node;if(o.pan&&ac.createStereoPanner){const pn=ac.createStereoPanner();pn.pan.value=o.pan;n.connect(pn);n=pn}
-  n.connect(b.in);if(o.send){const sg=ac.createGain();sg.gain.value=o.send;n.connect(sg).connect(b.send)}}
-/* tone：f→f1（pt 秒で）、type、v 音量、a 立ち上がり、dur 長さ（指数で減衰）、det 2つ目の発振器のずれ（cent）、lp→lp1 ローパス、vib ビブラート[速さ,深さcent]、at 開始の遅れ */
-function tone(o){const b=bus();if(!b)return;try{const t=ac.currentTime+(o.at||0),d=o.dur||.1,a=o.a||.002,g=ac.createGain();
-  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(o.v,t+a);if(o.hold)g.gain.setValueAtTime(o.v,t+a+o.hold);g.gain.exponentialRampToValueAtTime(.0001,t+d);
-  let head=g;if(o.lp){const f=ac.createBiquadFilter();f.type='lowpass';f.Q.value=o.q||1;f.frequency.setValueAtTime(o.lp,t);if(o.lp1)f.frequency.exponentialRampToValueAtTime(o.lp1,t+(o.lt||d));f.connect(g);head=f}
-  const os=(o.det?[-o.det/2,o.det/2]:[0]).map(dc=>{const x=ac.createOscillator();x.type=o.type||'square';x.frequency.setValueAtTime(o.f,t);if(o.f1)x.frequency.exponentialRampToValueAtTime(o.f1,t+(o.pt||d));x.detune.value=dc;x.connect(head);return x});
-  if(o.vib){const l=ac.createOscillator(),lg=ac.createGain();l.frequency.value=o.vib[0];lg.gain.value=o.vib[1];l.connect(lg);os.forEach(x=>lg.connect(x.detune));l.start(t);l.stop(t+d+.05)}
-  outTo(g,o,t);os.forEach(x=>{x.start(t);x.stop(t+d+.05)})}catch(e){}}
-/* nz：ノイズを帯域（bp→bp1）で絞る。hp ならハイパス。v 音量、dur 長さ、a 立ち上がり */
-function nz(o){const b=bus();if(!b||!NZB)return;try{const t=ac.currentTime+(o.at||0),d=o.dur||.05,src=ac.createBufferSource();src.buffer=NZB;
-  const f=ac.createBiquadFilter();f.type=o.hp?'highpass':'bandpass';f.Q.value=o.q||1.2;f.frequency.setValueAtTime(o.bp||2000,t);if(o.bp1)f.frequency.exponentialRampToValueAtTime(o.bp1,t+d);
-  const g=ac.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(o.v,t+(o.a||.001));g.gain.exponentialRampToValueAtTime(.0001,t+d);
-  src.connect(f).connect(g);outTo(g,o,t);src.start(t,Math.random()*.5);src.stop(t+d+.05)}catch(e){}}
-const jit=(k=.03)=>1+(Math.random()*2-1)*k; // 連打のばらつき
+/* ================= 効果音（8bit チップチューン）=================
+   ファミコンの音源と同じ材料だけで作る：矩形波2つ（デューティ 12.5/25/50%）・段々の三角波（32段）・15ビット LFSR のノイズ（長周期／短周期）。
+   1/60秒（1フレーム）ごとに音程・音量（16段階）を段々に変える。フィルター・残響・左右の振り分けは使わない（モノラル）。
+   普段の音（打撃・壁・アイテム）は短い無機質な「ピッ」「プッ」。盛り上がる所（ゴール・スマッシュ・パリィ・スーパーシュート・爆発）だけアルペジオや滑る音程で派手に。
+   フレーム列 F[k]={p1:[周波数,デューティ,音量0-15], p2:[…], t:[周波数], n:[周期0-15, 音量, 短周期]} → 最初に1回だけ波形にして保存（CHIP.cache）して鳴らす。 */
+const CHIP={cache:{},g:null},NPER=[4,8,16,32,64,96,128,160,202,254,380,508,762,1016,2034,4068];
+function chipRender(F){const sr=ac.sampleRate,spf=Math.round(sr/60),n=F.length*spf+spf,buf=ac.createBuffer(1,n,sr),d=buf.getChannelData(0);
+  let a1=0,a2=0,at=0,lf=1,na=0;
+  for(let fi=0;fi<F.length;fi++){const f=F[fi]||{};for(let k=0;k<spf;k++){let o=0;
+    if(f.p1&&f.p1[2]>0){a1=(a1+f.p1[0]/sr)%1;o+=(a1<f.p1[1]?1:-1)*f.p1[2]/15*.2}
+    if(f.p2&&f.p2[2]>0){a2=(a2+f.p2[0]/sr)%1;o+=(a2<f.p2[1]?1:-1)*f.p2[2]/15*.16}
+    if(f.t&&f.t[0]>0){at=(at+f.t[0]/sr)%1;const st=Math.floor(at*32),v=st<16?st:31-st;o+=(v/7.5-1)*.22}
+    if(f.n&&f.n[1]>0){na+=1789773/NPER[f.n[0]]/sr;while(na>=1){na-=1;const b=(lf^(lf>>(f.n[2]?6:1)))&1;lf=(lf>>1)|(b<<14)}o+=((lf&1)?-1:1)*f.n[1]/15*.18}
+    d[fi*spf+k]=o}}
+  return buf}
+function chip(key,make){if(!ac)return;try{if(!CHIP.g){CHIP.g=ac.createGain();CHIP.g.gain.value=.85;CHIP.g.connect(ac.destination)}
+  const b=CHIP.cache[key]||(CHIP.cache[key]=chipRender(make()));const s=ac.createBufferSource();s.buffer=b;s.connect(CHIP.g);s.start()}catch(e){}}
+const FR=n=>Array.from({length:n},()=>({}));
+const V=(v,k,step)=>Math.max(0,Math.round(v-k*step)); // 音量を1フレームごとに下げる
+const lv4=sp=>sp<300?0:sp<700?1:sp<1100?2:3; // 打撃の強さを4段階に
 const SFXP={
-  hit(sp,x){const k=clamp(sp/1480,0,1),pan=panX(x),f=(260+k*300)*jit(); // 打撃：カッ（ノイズ）＋音程が落ちる胴鳴り＋強いほど低いドン
-    nz({bp:4200,bp1:2400,q:1.4,v:.10+.22*k,dur:.018+.012*k,pan});
-    tone({type:'square',f:f*1.9,f1:f,pt:.03,v:.07+.11*k,dur:.05+.05*k,lp:5200,lp1:1400,det:14,pan,send:.12});
-    if(k>.45)tone({type:'sine',f:140,f1:55,pt:.07,v:.16*k,dur:.09,pan})},
-  smash(sp,x){const pan=panX(x); // スマッシュ：割れるアタック＋明るい和音の刺し＋腹に来る低音。主要部は約90ms（ヒットストップ中）で鳴らし終える
-    nz({bp:6500,bp1:900,q:.9,v:.42,dur:.09,pan,send:.25});
-    for(const [m,v] of [[1,.12],[1.5,.08],[2,.07]])tone({type:'square',f:523*m*jit(.01),f1:392*m,pt:.08,v,dur:.13,lp:7000,lp1:1800,det:18,pan,send:.3});
-    tone({type:'sine',f:110,f1:38,pt:.16,v:.34,dur:.2,pan});tone({type:'triangle',f:1568,f1:2093,pt:.04,v:.05,dur:.07,at:.01,pan})},
-  wall(sp,x){const k=clamp(sp/1480,0,1);if(k<.04)return; // 壁：短く乾いたチッ。軽い球ほど小さく高い
-    tone({type:'triangle',f:(980-k*300)*jit(.05),f1:520,pt:.02,v:.07+.17*k,dur:.03+.03*k,pan:panX(x)});nz({bp:3000,v:.06+.14*k,dur:.012,pan:panX(x)})},
-  post(v,x){const k=clamp(v/1200,.25,1),pan=panX(x); // ゴールポスト：カーン（金属の非整数倍音）
-    for(const [m,a,dd] of [[1,1,.32],[2.76,.55,.2],[5.4,.3,.12]])tone({type:'triangle',f:1180*m,v:.24*a*k,dur:dd,pan,send:.35});nz({bp:5000,v:.25*k,dur:.012,pan})},
-  goal(sc){ // ゴール：ドンと鳴ってから上がるファンファーレ、最後の和音はビブラートで伸ばす（いちばん大きい）
-    nz({bp:900,bp1:120,q:.7,v:.45,dur:.45,send:.3});tone({type:'sine',f:90,f1:30,pt:.4,v:.4,dur:.45});
-    [784,988,1175,1568].forEach((f,k)=>tone({type:'square',f,v:.09,dur:.11,det:12,lp:6000,at:.08+k*.07,send:.25}));
-    for(const f of [1568,1976,2349])tone({type:'square',f,v:.06,a:.01,hold:.25,dur:.7,det:10,lp:5000,lp1:2200,vib:[7,18],at:.38,send:.35})},
-  parry(){ // パリィ成立：キュイーン（ローパスが開きながら上がる）→ 頂点でキンッ＋きらめき
-    tone({type:'sawtooth',f:240,f1:2600,pt:.28,v:.11,dur:.32,lp:900,lp1:9000,lt:.28,det:20,send:.3});
-    tone({type:'square',f:480,f1:5200,pt:.3,v:.045,dur:.34,det:8});
-    for(const [f,v] of [[2637,.08],[3520,.05],[5274,.03]])tone({type:'triangle',f,v,dur:.5,at:.28,vib:[9,12],send:.4});nz({hp:1,bp:6000,v:.05,dur:.3,at:.25})},
-  pfire(x){const pan=panX(x); // パリィの発射：ヒュン（風）＋上がるピッ
-    nz({bp:1800,bp1:7000,q:1.8,v:.22,dur:.16,pan,send:.15});tone({type:'square',f:660,f1:2640,pt:.1,v:.08,dur:.13,det:16,pan});tone({type:'sine',f:160,f1:70,v:.15,dur:.1,pan})},
-  early(x){const pan=panX(x); // 早すぎ：ブッブー（にごった2音、下がる）
-    tone({type:'square',f:330,f1:300,v:.03,dur:.07,det:40,lp:1800,pan});tone({type:'square',f:196,f1:150,v:.035,dur:.17,det:45,lp:1200,at:.08,pan})},
-  pwr(){[523,659,784,1047,1319].forEach((f,k)=>tone({type:'square',f,v:.035,dur:.08,det:10,at:k*.045,send:.2}));tone({type:'triangle',f:2093,v:.05,dur:.4,at:.22,vib:[8,20],send:.3})}, // 強化
-  charge(){tone({type:'sawtooth',f:180,f1:900,pt:.3,v:.07,dur:.34,lp:600,lp1:4000,det:25,vib:[14,30]})}, // 構え：ためのうなり
-  sfire(x){const pan=panX(x); // スーパーシュート：ビーム（下がるのこぎり波）＋割れ＋低音
-    tone({type:'sawtooth',f:1800,f1:140,pt:.3,v:.12,dur:.34,lp:8000,lp1:900,det:30,pan,send:.3});nz({bp:3000,bp1:300,v:.3,dur:.22,pan,send:.2});tone({type:'sine',f:120,f1:40,v:.3,dur:.25,pan})},
-  stun(x){const pan=panX(x); // スタン：ピヨピヨと下がる
-    [880,740,620].forEach((f,k)=>tone({type:'triangle',f,f1:f*.8,v:.07,dur:.09,vib:[18,60],at:k*.1,pan,send:.2}));nz({bp:600,v:.12,dur:.08,pan})},
-  get(){tone({type:'square',f:988,v:.03,dur:.07,det:8,send:.25});tone({type:'square',f:1319,v:.03,dur:.16,det:8,at:.07,send:.3});tone({type:'triangle',f:2637,v:.025,dur:.2,at:.07})}, // 取得：ピロン
-  spawn(x){tone({type:'triangle',f:1319,v:.035,dur:.06,pan:panX(x)});tone({type:'triangle',f:1760,v:.03,dur:.09,at:.06,pan:panX(x)})}, // 出現（控えめ）
-  place(x){const pan=panX(x);tone({type:'square',f:300,f1:90,pt:.08,v:.08,dur:.1,lp:2200,pan});nz({bp:700,v:.08,dur:.05,pan})}, // 設置：ズン
-  bump(x){const pan=panX(x);tone({type:'square',f:520,f1:1040,pt:.03,v:.07,dur:.16,vib:[22,80],lp:4000,pan,send:.2});tone({type:'sine',f:180,f1:90,v:.12,dur:.08,pan})}, // バンパー：ボヨン
-  boost(x){const pan=panX(x);nz({bp:900,bp1:5000,q:2,v:.3,dur:.14,pan});tone({type:'sawtooth',f:300,f1:1600,pt:.12,v:.09,dur:.14,lp:3000,pan})}, // 加速床：シュイン
-  jump(x){tone({type:'square',f:260,f1:1300,pt:.22,v:.1,dur:.26,lp:3500,pan:panX(x),send:.2})}, // ジャンプ台：ビヨーン
-  land(x){const pan=panX(x);tone({type:'sine',f:130,f1:45,v:.3,dur:.2,pan});nz({bp:500,bp1:120,v:.22,dur:.15,pan})}, // 着地：ドスン
-  mud(x){const pan=panX(x);nz({bp:500,bp1:180,q:3,v:.4,dur:.22,pan});tone({type:'sawtooth',f:180,f1:60,v:.12,dur:.2,lp:500,vib:[30,120],pan})}, // スライム：ズブッ
-  boom(x){const pan=panX(x);nz({bp:1200,bp1:80,q:.6,v:.5,dur:.6,pan,send:.3});tone({type:'sine',f:100,f1:28,pt:.5,v:.4,dur:.6,pan});tone({type:'sawtooth',f:400,f1:40,pt:.5,v:.06,dur:.55,lp:1500,lp1:200,pan})}, // 4秒ルールの爆発
-  tick(last){tone({type:'square',f:last?1760:1175,v:last?.12:.08,dur:.05,det:6})}, // 4秒ルールの秒読み
-  live(){tone({type:'square',f:1319,v:.04,dur:.05});tone({type:'square',f:1760,v:.04,dur:.07,at:.05})}, // サーブ後に動き出した
+  hit(sp){const L=lv4(sp);chip('hit'+L,()=>{const F=FR(5),f=[392,494,587,698][L],v=[9,11,13,15][L]; // ピッ（強いほど高く大きく）
+    for(let k=0;k<5;k++)F[k].p1=[f,.25,V(v,k,3)];if(L>=2){F[0].n=[3,10,0];F[1].n=[3,5,0]}return F})},
+  wall(sp){const L=lv4(sp);chip('wall'+L,()=>{const F=FR(2),v=[3,5,7,9][L];F[0].p1=[1047,.125,v];F[1].p1=[1047,.125,v>>1];return F})}, // チッ
+  post(){chip('post',()=>{const F=FR(8);for(let k=0;k<8;k++){F[k].p1=[1568,.5,V(13,k,1.6)];F[k].p2=[2349,.25,V(8,k,1)]}return F})}, // カン
+  smash(){chip('smash',()=>{const F=FR(12); // ドガッ：下がる矩形波＋ノイズ＋三角波の低音（主要部は6フレーム＝100ms）
+    for(let k=0;k<12;k++){F[k].p1=[1400*Math.pow(.8,k),.5,V(15,k,1.3)];F[k].n=[k<3?2:k<6?6:9,V(15,k,1.4),0];if(k<9)F[k].t=[196*Math.pow(.82,k)]}return F})},
+  goal(){chip('goal',()=>{const F=FR(56),N=[523,659,784,1047]; // ゴール：ドン → ド・ミ・ソ・ドの上昇 → 和音のアルペジオで伸ばす
+    F[0].n=[8,15,0];F[1].n=[9,12,0];F[2].n=[10,8,0];
+    N.forEach((f,i)=>{for(let k=0;k<5;k++){F[i*5+k].p1=[f,.5,13-k];F[i*5+k].p2=[f/2,.25,8]}F[i*5].t=[f/4]});
+    const CH=[1047,1319,1568];for(let k=20;k<56;k++){F[k].p1=[CH[k%3],.25,V(12,k-20,.3)];F[k].p2=[523,.5,V(9,k-20,.25)];if(k<44)F[k].t=[131]}
+    return F})},
+  parry(){chip('parry',()=>{const F=FR(34); // パリィ：段々に駆け上がる → 頂点でキンッ（こだまつき）
+    for(let k=0;k<16;k++){const f=330*Math.pow(2,k*2/12);F[k].p1=[f,.125,12];F[k].p2=[f*1.5,.25,6]}
+    F[16].n=[1,14,0];F[17].n=[2,9,0];for(let k=16;k<34;k++){F[k].p1=[2637,.5,V(15,k-16,1.1)];if(k<26)F[k].t=[659];if(k>=22)F[k].p2=[2637,.5,V(6,k-22,.5)]}return F})},
+  pfire(){chip('pfire',()=>{const F=FR(7);for(let k=0;k<7;k++){F[k].p1=[523*Math.pow(1.3,k),.25,V(13,k,1)];if(k<3)F[k].n=[1,V(9,k,3),0]}return F})}, // ピュッ
+  early(){chip('early',()=>{const F=FR(13);for(let k=0;k<4;k++)F[k].p1=[147,.25,9];for(let k=5;k<13;k++)F[k].p1=[110,.25,V(9,k-5,1)];return F})}, // ブッブー
+  pwr(){chip('pwr',()=>{const F=FR(18),N=[523,659,784,1047,1319,1568];N.forEach((f,i)=>{F[i*2].p1=[f,.5,11];F[i*2+1].p1=[f,.5,9]});for(let k=12;k<18;k++)F[k].p1=[k%2?1568:2093,.5,V(9,k-12,1.3)];return F})}, // 強化
+  charge(){chip('charge',()=>{const F=FR(18);for(let k=0;k<18;k++)F[k].p1=[196*Math.pow(1.08,k),.125,k%2?4:8];return F})}, // 構え
+  sfire(){chip('sfire',()=>{const F=FR(18);for(let k=0;k<18;k++){F[k].p1=[2093*Math.pow(.86,k),.5,V(15,k,.8)];F[k].n=[Math.min(13,5+(k>>1)),V(14,k,.8),0];if(k<14)F[k].t=[110*Math.pow(.95,k)]}return F})}, // スーパーシュート
+  stun(){chip('stun',()=>{const F=FR(12);[1319,1175,988].forEach((f,i)=>{for(let k=0;k<3;k++)F[i*4+k].p1=[f*Math.pow(.94,k),.125,10]});return F})}, // ピヨピヨ
+  get(){chip('get',()=>{const F=FR(11);for(let k=0;k<3;k++)F[k].p1=[1047,.5,12];for(let k=3;k<11;k++)F[k].p1=[1568,.5,V(12,k-3,1)];return F})}, // ピコン
+  spawn(){chip('spawn',()=>{const F=FR(6);for(let k=0;k<3;k++)F[k].p1=[1047,.125,7];for(let k=3;k<6;k++)F[k].p1=[1319,.125,V(7,k-3,2)];return F})}, // ポッ
+  place(){chip('place',()=>{const F=FR(4);for(let k=0;k<4;k++){F[k].p1=[196,.5,V(7,k,2)];F[k].n=[8,V(6,k,2),0]}return F})}, // ボッ
+  bump(){chip('bump',()=>{const F=FR(6),f=[784,1175,1047,784,698,587];for(let k=0;k<6;k++)F[k].p1=[f[k],.5,V(12,k,1.2)];return F})}, // ポヨン
+  boost(){chip('boost',()=>{const F=FR(6);for(let k=0;k<6;k++)F[k].p1=[392*Math.pow(1.32,k),.125,10];return F})}, // シュッ
+  jump(){chip('jump',()=>{const F=FR(10);for(let k=0;k<10;k++)F[k].p1=[330*Math.pow(1.17,k),.25,V(11,k,.4)];return F})}, // ピョーン
+  land(){chip('land',()=>{const F=FR(6);for(let k=0;k<6;k++){F[k].n=[10,V(8,k,1.5),0];if(k<3)F[k].p1=[98,.5,V(7,k,2)]}return F})}, // ドッ
+  mud(){chip('mud',()=>{const F=FR(10);for(let k=0;k<10;k++)F[k].n=[12,V(10,k,1),1];return F})}, // ズッ（短周期ノイズ）
+  boom(){chip('boom',()=>{const F=FR(36);for(let k=0;k<36;k++){F[k].n=[k<4?9:13,V(15,k,.42),0];if(k<20)F[k].t=[110*Math.pow(.95,k)];if(k<10)F[k].p1=[220*Math.pow(.85,k),.5,V(14,k,1.3)]}return F})}, // ドカーン
+  tick(last){chip('tick'+(last?1:0),()=>{const F=FR(3);for(let k=0;k<3;k++)F[k].p1=[last?1760:1319,.5,V(10,k,3)];return F})}, // ピッ（秒読み）
+  live(){chip('live',()=>{const F=FR(6);F[0].p1=F[1].p1=[1319,.5,8];F[3].p1=F[4].p1=F[5].p1=[1760,.5,8];return F})}, // ピピッ
 };
 function _sfx(n,...a){if(!ac)return;const f=SFXP[n];if(f)f(...a)}
 function sfx(...a){relay(['s','sfx',a]);if(!rctx)_sfx(...a)}
