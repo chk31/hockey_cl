@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.51">
+<meta name="version" content="1.52">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.51'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.52'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=1680,WIN=7; // MAXV＝パックの最高速（v1.37 で旧ゲームスピード0.8倍を基準＝100%に。パックの速さの値はすべて旧値の0.8倍）
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -169,9 +169,9 @@ function build3D(){
   meshes.endB=[];for(const [z,m] of [[-FL/2-T/2,railMs[2]],[FL/2+T/2,railMs[1]]])for(const s of [-1,1]){const r=rail(seg,T,s*sx,z,m);if(z>0)meshes.endB.push({r,s})} // 下（プレイヤー）側はボスに壊されるとゴールが広がる
   for(const z of [-FL/2-T/2,FL/2+T/2]){const m=new THREE.Mesh(new THREE.BoxGeometry(GW,2,T),new THREE.MeshBasicMaterial({color:0x000000}));m.position.set(0,0,z);scene.add(m);if(z>0)meshes.mouthB=m}
   // 四隅の丸み：レールと同じ色の階段状ブロック（当たり判定は半径 RC の円）
-  {const CS=8;for(const [cx,cy,sx,sy] of CORNERS){const m=cy<MID?railMs[2]:railMs[1];
+  meshes.cornerB=[[],[]];{const CS=8;for(const [cx,cy,sx,sy] of CORNERS){const m=cy<MID?railMs[2]:railMs[1];
     for(let j=0;j<RC;j+=CS){const dy=RC-(j+CS/2),w=RC-Math.sqrt(Math.max(0,RC*RC-dy*dy));if(w<2)continue;
-      rail(w,CS,(sx<0?w/2:FW-w/2)-FW/2,(sy<0?FY0+j+CS/2:FY1-j-CS/2)-MID,m)}}}
+      const r=rail(w,CS,(sx<0?w/2:FW-w/2)-FW/2,(sy<0?FY0+j+CS/2:FY1-j-CS/2)-MID,m);if(sy>0)meshes.cornerB[sx<0?0:1].push(r)}}}
   // ゴールポスト（ゴール口の両端）：白い柱。当たると光る
   meshes.postM=[];meshes.posts=[[FW/2-GW/2,FY0],[FW/2+GW/2,FY0],[FW/2-GW/2,FY1],[FW/2+GW/2,FY1]].map(([px,py])=>{const mm=toon({color:0xffffff});const b=sh(hull(new THREE.Mesh(new THREE.BoxGeometry(14,RH+10,14),mm),3));b.position.set(px-FW/2,(RH+10)/2,py-MID);scene.add(b);meshes.postM.push(b);return mm});
   // マレット
@@ -376,7 +376,7 @@ function juice(sh,stop,a,fl,col='#ffffff'){relay(['j',sh,stop,a,fl,ck(col)]);hit
   if(minimal())return;if(lite()){sh*=.2;a=0;fl*=.25}shake=Math.max(shake,sh);ab=Math.max(ab,a);if(fl>flash){flash=fl;fcol=hex(col)}}
 /* 盤面の四隅の丸み（半径 RC）。パック・マレットとも、角の円の内側にとどめる（角に挟まらない） */
 const RC=64,CORNERS=[[RC,FY0+RC,-1,-1],[FW-RC,FY0+RC,1,-1],[RC,FY1-RC,-1,1],[FW-RC,FY1-RC,1,1]];
-function cornerPush(o,r){for(const [cx,cy,sx,sy] of CORNERS){const dx=o.x-cx,dy=o.y-cy;if(dx*sx<=0||dy*sy<=0)continue;const d=Math.hypot(dx,dy),R=RC-r;if(d<=R)return null;
+function cornerPush(o,r){for(const [cx,cy,sx,sy] of CORNERS){if(sy>0&&BOSS.on&&(sx<0?WB.bl:WB.br)>=WSEG)continue;const dx=o.x-cx,dy=o.y-cy;if(dx*sx<=0||dy*sy<=0)continue;const d=Math.hypot(dx,dy),R=RC-r;if(d<=R)return null;
   const nx=dx/d,ny=dy/d;o.x=cx+nx*R;o.y=cy+ny*R;return [nx,ny]}return null}
 const SMASH=1480; // スマッシュ判定の相対速度。最高速 1680 に近い強打だけ
 function hit(x,y,sp,txt,who=-1,wn=null){
@@ -555,32 +555,42 @@ function cpuUpdate(dt){
    プレイヤーの技とルールを盗んで使うボス。HP10（ゴール1点で1、パリィで返した球のゴールは2）。プレイヤーはライフ5。
    技の前兆はすべてボス陣地の「次の技ボックス」で分かる（いつも次の技の絵、使う1秒前に光って揺れ、名前が出る）。
    第1段階（HP10〜7）コピー／第2段階（6〜4）強奪／最終段階（3〜1）越境＝ルールの書き換え（メタ技）。 */
-const BOSSC={tiltFx:2.1,tiltAng:.38,wallEvery:2,hp:10,lives:5,par2:2,flinch:1.5,whiff:2,wallFl:2.5,restore:3.5,parDelay:.5,tele:1.0,wallHP:2,spd:1.3,hold:2,widen:60,widenMax:120,tilt:120,rush:2.2,hudT:5,steal:2.5}; // 【調整値】
+const BOSSC={crack:70,tiltFx:2.1,tiltAng:.38,wallEvery:2,hp:10,lives:5,par2:2,flinch:1.5,whiff:2,wallFl:2.5,restore:3.5,parDelay:.5,tele:1.0,wallHP:2,spd:1.3,hold:2,widen:60,widenMax:120,tilt:120,rush:2.2,hudT:5,steal:2.5}; // 【調整値】
 const BOSS={on:false};
 const BOSS_ROT={1:['twin','wall'],2:['bparry','bsuper','steal','twin'],3:['wallbreak','rush','hud','bsuper','bparry']};
 const BOSS_NAME={twin:'ツイン加速ショット',wall:'メガバンパー',bparry:'パリィの構え',bsuper:'スーパーシュート',steal:'アイテムどろぼう',wallbreak:'ゴールの壁を壊す',rush:'とっしん',hud:'アイテム欄を壊す'};
 const BOSS_BOX={x:FW-96,y:FY0+118};
-let GWB=GW; // プレイヤー（下）側のゴールの幅。ボスが壁を壊すと広がる
-const goalW=y=>y>MID?GWB:GW;
+/* 手前（プレイヤー側）の壁：ボスの技のたびに、ゴールの左右から外へヒビが広がる（cl/cr）。
+   ヒビにパックが当たると、その側のヒビの所がまとめて砕け（bl/br）、ボスの得点。壊れた所はゴール口と同じ（抜けると失点）。最後は手前の壁が全部壊れる */
+const WSEG=(FW-GW)/2,WB={cl:0,cr:0,bl:0,br:0};
+const openB=()=>[FW/2-GW/2-WB.bl,FW/2+GW/2+WB.br]; // 下のゴール口（壊れた所を含む）
+const inMouthAt=(x,y)=>{if(y<MID)return Math.abs(x-FW/2)<GW/2;const [L,R]=openB();return x>L&&x<R};
+const crackSide=x=>{if(!BOSS.on)return -1;const [L,R]=openB();if(x<=L&&x>=FW/2-GW/2-WB.cl)return 0;if(x>=R&&x<=FW/2+GW/2+WB.cr)return 1;return -1};
+function wallReset(){WB.cl=WB.cr=WB.bl=WB.br=0;bossField()}
+function wallShatter(side){const a=side?FW/2+GW/2+WB.br:FW/2-GW/2-WB.bl,c=side?WB.cr:WB.cl;if(side)WB.br=WB.cr;else WB.bl=WB.cl;bossField(); // ヒビの所がまとめて砕ける
+  const b=side?FW/2+GW/2+c:FW/2-GW/2-c;for(let k=0;k<6;k++){const x=a+(b-a)*k/5;addFx('impact',x,FY1,rnd(70,110),'','');if(k%2)addFx('wave',x,FY1,100,'','#ff0055')}
+  juice(26,.12,1.3,.5,'#ff0055');noise(.6,.22);_slide(300,40,.5,'sawtooth',.1);BOSS.cap=1.6;BOSS.capTxt='壁がくだけた!'}
 function bossBest(){try{return JSON.parse(localStorage.getItem('ah_boss')||'{}')}catch(e){return {}}}
 function bossStart(){
   const spd0=BOSS.on?BOSS.spd0:SPD;
   start('cpu',3);
   Object.assign(BOSS,{on:true,hp:BOSSC.hp,lives:BOSSC.lives,phase:1,rot:{1:0,2:0,3:0},next:'twin',cool:1.4,tele:0,teleK:null,wait:0,stance:0,rush:0,steal:0,slotX:[0,0],
     rw:[],hold2:false,tilt:false,spd0,round:0,wallRound:-9,t0:performance.now(),parries:0,par2:0,fails:{1:0,2:0,3:0},banner:{t:2.4,a:'BOSS',b:'NULL'},rwT:0,hint:true,result:null,cap:0,capTxt:''});
-  SPD=spd0;GWB=GW;P[1].maxV=LV[3].sp;bossField();serve(1);
+  SPD=spd0;WB.cl=WB.cr=WB.bl=WB.br=0;P[1].maxV=LV[3].sp;bossField();serve(1);
 }
-function bossOff(){if(!BOSS.on)return;BOSS.on=false;SPD=BOSS.spd0;GWB=GW;bossField()}
+function bossOff(){if(!BOSS.on)return;BOSS.on=false;SPD=BOSS.spd0;wallReset()}
 function bossField(){ // 下のゴールの幅に合わせて、3D の端のレール・ゴール口・ポストを動かす
-  if(!has3D||!meshes.endB)return;const seg0=(FW-GW)/2,seg=(FW-GWB)/2;
-  for(const {r,s} of meshes.endB){r.scale.x=seg/seg0;r.position.x=s*(GWB/2+seg/2)}
-  if(meshes.mouthB)meshes.mouthB.scale.x=GWB/GW;
-  if(meshes.postM){meshes.postM[2].position.x=-GWB/2;meshes.postM[3].position.x=GWB/2}}
+  if(!has3D||!meshes.endB)return;const [L,R]=openB(),seg0=WSEG;
+  for(const {r,s} of meshes.endB){const w=s<0?L:FW-R;r.visible=w>1;if(w>1){r.scale.x=w/seg0;r.position.x=(s<0?w/2:R+w/2)-FW/2}}
+  if(meshes.mouthB){meshes.mouthB.scale.x=(R-L)/GW;meshes.mouthB.position.x=(L+R)/2-FW/2}
+  if(meshes.postM){meshes.postM[2].position.x=L-FW/2;meshes.postM[3].position.x=R-FW/2;meshes.postM[2].visible=L>1;meshes.postM[3].visible=R<FW-1}
+  if(meshes.cornerB)meshes.cornerB.forEach((a,k)=>a.forEach(r=>r.visible=!(BOSS.on&&(k?WB.br:WB.bl)>=WSEG)))}
 function bossFlinch(t,txt='ひるみ!'){const p=P[1];p.stun=Math.max(p.stun,t);addFx('wave',p.x,p.y,110,'','#ffffff');addFx('impact',p.x,p.y,70,'','');juice(10,.06,.6,.2,'#ffffff');seq([880,660,440],.05,'square',.06);BOSS.cap=1.2;BOSS.capTxt=txt}
 function bossReady(k){const B=BOSS;
   if(k==='twin')return puck.y<MID-60&&puck.air===0;
   if(k==='steal')return P[0].box.on;
   if(k==='bsuper')return !P[1].pw;
+  if(k==='wallbreak')return WB.cl<WSEG||WB.cr<WSEG;
   if(k==='wall')return wallOk(); // メガバンパーは重ねない・2ラウンドに1回まで
   return true}
 const wallOk=()=>!placed.some(q=>q.mega&&!q.dead)&&BOSS.round-BOSS.wallRound>=BOSSC.wallEvery; // ラウンド＝1点ごと
@@ -598,8 +608,8 @@ function bossExec(k){const B=BOSS,b=P[1];
   else if(k==='bparry'){B.stance=2.6;_seq([1319,1760],.05,'square',.05)}
   else if(k==='bsuper'){b.pw=true;addFx('wave',b.x,b.y,110,'',AURA);seq([523,784,1047,1568],.05,'square',.06)}
   else if(k==='steal'){B.steal=BOSSC.steal}
-  else if(k==='wallbreak'){if(GWB>=GW+BOSSC.widenMax){return}GWB=Math.min(GW+BOSSC.widenMax,GWB+BOSSC.widen);B.rw.push('wall');bossField();
-    for(const sx of [-1,1]){const x=FW/2+sx*GWB/2;addFx('impact',x,FY1,90,'','');addFx('wave',x,FY1,120,'','#ff0055')}
+  else if(k==='wallbreak'){if(WB.cl>=WSEG&&WB.cr>=WSEG)return;WB.cl=Math.min(WSEG,WB.cl+BOSSC.crack);WB.cr=Math.min(WSEG,WB.cr+BOSSC.crack);bossField(); // ヒビが広がる
+    for(const sx of [-1,1]){const x=FW/2+sx*(GW/2+(sx<0?WB.cl:WB.cr));addFx('impact',x,FY1,80,'','');addFx('wave',x,FY1,110,'','#ff0055')}
     juice(22,.1,1.2,.4,'#ff0055');noise(.5,.2);slide(200,40,.5,'sawtooth',.1)}
   else if(k==='rush'){B.rush=BOSSC.rush;slide(200,900,.3,'sawtooth',.07)}
   else if(k==='hud'){const s=P[0].items[1]?1:0;B.slotX[s]=BOSSC.hudT;addFx('impact',slotX(s),SLOT_Y,80,'','');juice(14,.05,.8,.2,'#ff0055');noise(.3,.15)}
@@ -624,9 +634,9 @@ function bossUpdate(dt){const B=BOSS;if(!B.on)return;
 function bossGoal(scorer,parGoal){const B=BOSS;
   B.stance=0;B.rush=0;B.steal=0;B.tele=0;B.teleK=null;B.cool=2.5;B.round++;
   if(scorer===0){const dmg=parGoal?BOSSC.par2:1;B.hp=Math.max(0,B.hp-dmg);if(parGoal){B.par2++;B.cap=2;B.capTxt='PARRY GOAL ×2'}
-    if(B.rw.length){const k=B.rw.pop();if(k==='spd')SPD=B.spd0;else if(k==='hold')B.hold2=false;else if(k==='wall'){GWB=Math.max(GW,GWB-BOSSC.widen);bossField()}} // ゴールを決めると書き換えが1つ戻る
+    if(B.rw.length){const k=B.rw.pop();if(k==='spd')SPD=B.spd0;else if(k==='hold')B.hold2=false} // ゴールを決めると書き換えが1つ戻る
     if(B.hp<=0){B.result='win';const t=(performance.now()-B.t0)/1000,bb=bossBest();B.time=t;B.newBest=!bb.best||t<bb.best;try{localStorage.setItem('ah_boss',JSON.stringify({clear:true,best:B.newBest?t:bb.best}))}catch(e){}
-      SPD=B.spd0;GWB=GW;B.tilt=false;B.hold2=false;B.rw=[];bossField();juice(40,.4,2,1.5,'#ffffff');addFx('nulldie',P[1].x,P[1].y,1,'','#3dff7a');return true}
+      SPD=B.spd0;wallReset();B.tilt=false;B.hold2=false;B.rw=[];bossField();juice(40,.4,2,1.5,'#ffffff');addFx('nulldie',P[1].x,P[1].y,1,'','#3dff7a');return true}
     const ph=B.hp<=3?3:B.hp<=6?2:1;
     if(ph!==B.phase){B.phase=ph;B.rot[ph]=0;B.next=BOSS_ROT[ph][0];B.banner={t:2.4,a:'PHASE '+ph,b:ph===2?'強奪':'越境'};
       if(ph===3){SPD=BOSSC.spd;B.hold2=true;B.rw=['hold','spd'];B.rwT=2.2;B.banner.t=0}} // 越境：設定の書き換え（ゴールのたびに1つ戻る）
@@ -637,7 +647,7 @@ function bossGoal(scorer,parGoal){const B=BOSS;
 function bossContinue(){const B=BOSS,ph=B.phase,hp=[0,10,6,3][ph],lives=BOSSC.lives+(B.fails[ph]>=2?2:0),keep={...B};
   bossStart();Object.assign(BOSS,{hp,lives,phase:ph,fails:keep.fails,t0:keep.t0,parries:keep.parries,par2:keep.par2,hint:false,next:BOSS_ROT[ph][0],banner:{t:2,a:'CONTINUE',b:lives>BOSSC.lives?'ライフ+2':''}});
   if(ph===3){SPD=BOSSC.spd;BOSS.hold2=true;BOSS.rw=['hold','spd']}}
-function useRestore(i,s){const B=BOSS,p=P[i];p.items.splice(s,1);SPD=B.spd0;B.hold2=false;GWB=GW;B.tilt=false;B.slotX=[0,0];B.rw=[];bossField();bossFlinch(BOSSC.restore,'RESTORE!');
+function useRestore(i,s){const B=BOSS,p=P[i];p.items.splice(s,1);SPD=B.spd0;B.hold2=false;wallReset();B.tilt=false;B.slotX=[0,0];B.rw=[];bossFlinch(BOSSC.restore,'RESTORE!');
   addFx('wave',FW/2,MID,400,'','#ffffff');juice(24,.12,1.4,.8,'#ffffff');_seq([523,659,784,1047,1319,1568,2093],.06,'square',.07)}
 const holdLim=side=>BOSS.on&&BOSS.hold2&&side===0?BOSSC.hold:HOLD;
 const BTN=[{x:60,w:124,m:'cpu',l:0},{x:192,w:124,m:'cpu',l:1},{x:324,w:124,m:'cpu',l:2},{x:458,w:82,m:'boss',l:null},{x:60,w:152,m:'2p',l:null},{x:224,w:152,m:'net',l:null},{x:388,w:152,m:'opt',l:null}]; // 巻物＝ボス
@@ -1177,11 +1187,12 @@ function sub(h,ms){
   const f=Math.exp(-.28*hp);puck.vx*=f;puck.vy*=f;
   if(puck.x<PR){puck.x=PR;wall(0,puck.y,Math.abs(puck.vx));puck.vx=Math.abs(puck.vx)*.92}
   if(puck.x>FW-PR){puck.x=FW-PR;wall(FW,puck.y,Math.abs(puck.vx));puck.vx=-Math.abs(puck.vx)*.92}
-  const inMouth=Math.abs(puck.x-FW/2)<goalW(puck.y)/2;
+  const inMouth=inMouthAt(puck.x,puck.y);
   if(puck.y<FY0+PR&&!inMouth){puck.y=FY0+PR;wall(puck.x,FY0,Math.abs(puck.vy));puck.vy=Math.abs(puck.vy)*.92}
+  if(puck.y>FY1-PR&&!inMouth&&crackSide(puck.x)>=0){wallShatter(crackSide(puck.x));goal(1);return} // ヒビに当たると砕けてボスの得点
   if(puck.y>FY1-PR&&!inMouth){puck.y=FY1-PR;wall(puck.x,FY1,Math.abs(puck.vy));puck.vy=-Math.abs(puck.vy)*.92}
   {const n=cornerPush(puck,PR);if(n){const vn=puck.vx*n[0]+puck.vy*n[1];if(vn>0){puck.vx-=1.92*vn*n[0];puck.vy-=1.92*vn*n[1];hit(puck.x+n[0]*PR,puck.y+n[1]*PR,vn,'',-1,[-n[0],-n[1]])}}} // 丸い角で跳ね返る
-  for(const sy of [FY0,FY1])for(const sx of [FW/2-goalW(sy)/2,FW/2+goalW(sy)/2]){const v=bounceOff(sx,sy,0,.8);if(v)postHit(sx,sy,v)}
+  {const [L,R]=openB();for(const [sx,sy] of [[FW/2-GW/2,FY0],[FW/2+GW/2,FY0],[L,FY1],[R,FY1]]){if(sx<=1||sx>=FW-1)continue;const v=bounceOff(sx,sy,0,.8);if(v)postHit(sx,sy,v)}}
   if(BOSS.on&&BOSS.tilt&&puck.air===0)puck.vy+=BOSSC.tilt*hp; // 最後の1点：盤面が傾く（プレイヤーのゴール側へ流れる）
   if(puck.y<FY0-4){goal(0);return}
   if(puck.y>FY1+4){goal(1);return}
@@ -1841,7 +1852,7 @@ function drawUI(){
   g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,ui.width,ui.height);base();
   if(!has3D){g.fillStyle='#16206a';g.fillRect(0,FY0,FW,FL);
     for(const [cx,cy,sx,sy] of CORNERS){g.fillStyle=COL[cy<MID?1:0];for(let j=0;j<RC;j+=8){const dy=RC-(j+4),w=RC-Math.sqrt(RC*RC-dy*dy);g.fillRect(sx<0?0:FW-w,sy<0?FY0+j:FY1-j-8,w,8)}}
-    [[FW/2-GW/2,FY0],[FW/2+GW/2,FY0],[FW/2-GWB/2,FY1],[FW/2+GWB/2,FY1]].forEach(([x,y],k)=>sq(x,y,14,POST.fl[k]>.1?YEL:'#fff'));
+    [[FW/2-GW/2,FY0],[FW/2+GW/2,FY0],[openB()[0],FY1],[openB()[1],FY1]].forEach(([x,y],k)=>sq(x,y,14,POST.fl[k]>.1?YEL:'#fff'));
     P.forEach(p=>sq(p.x,p.y,MR*2,COL[p.i]));sq(puck.x,puck.y,PR*2,'#fff');
     P.forEach(p=>{if(p.box.on)sq(p.box.x,p.box.y,52,COL[p.i])});placed.forEach(it=>spr(it.type,it.x,it.y,IT[it.type].r*2,fwd(it.o)))}
   noFwd=true;withSide(puck.lastTouch>=0?puck.lastTouch:-1,trail);noFwd=false; // 軌跡は最後に打った人の STYLE・COLOR
@@ -1912,7 +1923,13 @@ function drawBoss(){const B=BOSS,b=P[1];
   for(const it of placed)if(it.mega&&!it.dead)for(let j=0;j<it.hp;j++){sq(it.x-12+j*12,it.y-50,10,'#000');sq(it.x-12+j*12,it.y-50,6,'#cc88ff')} // メガバンパーの耐久
   if(B.steal>0&&P[0].box.on){const bx=P[0].box;ring(bx.x,bx.y,46,B.steal*GRACE/BOSSC.steal,'#ff0055')}
   if(B.tilt){g.save();g.globalAlpha=.18;for(let r=0;r<6;r++){const y=FY0+((clock*120+r*170)%FL);for(let x=60;x<FW;x+=120){sq(x-10,y,8,'#fff');sq(x,y+8,8,'#fff');sq(x+10,y,8,'#fff')}}g.restore()} // 傾き
-  if(GWB>GW)for(const sx of [-1,1])for(let j=0;j<6;j++){const x=FW/2+sx*(GW/2+((GWB-GW)/2)*j/5);sq(x,FY1+6+(j%2)*8,8,'#ff0055')} // 壊れた壁のかけら
+  for(const side of [0,1]){const c=side?WB.cr:WB.cl,b=side?WB.br:WB.bl,e0=side?FW/2+GW/2:FW/2-GW/2,sg=side?1:-1;
+    if(c>b){const pts=[];for(let x=b;x<=c;x+=8)pts.push([e0+sg*x,FY1+4+Math.floor(hash(x*.37+side)*5)*4]); // ヒビ：レールの上の赤いギザギザ線（黒い縁取り、ときどき白く光る）
+      for(const [w,col] of [[9,'#000'],[5,blink(4)?'#ffffff':'#ff3366']])for(let k=1;k<pts.length;k++){const [x0,y0]=pts[k-1],[x1,y1]=pts[k],n=Math.max(1,Math.round(Math.hypot(x1-x0,y1-y0)/4));for(let j=0;j<=n;j++)sq(x0+(x1-x0)*j/n,y0+(y1-y0)*j/n,w,col)}
+      for(let k=1;k<pts.length;k+=2){const [x,y]=pts[k];sq(x,y-8,5,'#ff3366');sq(x+sg*4,y+10,5,'#ff3366')} // 枝分かれ
+      if(blink(2))ptext('!',e0+sg*(b+(c-b)/2),FY1-18,14,'#ff3366')}
+    if(b>0){for(let x=0;x<b;x+=12){sq(e0+sg*(x+6),FY1+2,8,blink(3)?'#ff0055':'#550022')}} // 壊れた所：赤い警告の点線（ここはゴール）
+  }
   // 次の技ボックス（前兆）
   {const t=B.tele>0,sh=t?(hash(clock*40)-.5)*8:0,x=BOSS_BOX.x+sh,y=BOSS_BOX.y;
     pbox(x-32,y-32,64,64,t?(blink(10)?YEL:'#fff'):'#ff0055','#000');bossIcon(t?B.teleK:B.next,x,y);
@@ -1922,7 +1939,7 @@ function drawBoss(){const B=BOSS,b=P[1];
     g.fillStyle='#000';g.fillRect(-40,-40,FW+80,FY0-26+40);
     ptext('NULL',28,36,24,'#ff0055',PIX,'left');ptext('PHASE '+B.phase+' '+['','コピー','強奪','越境'][B.phase],28,74,12,'#bbb',DOT,'left');
     for(let k=0;k<BOSSC.hp;k++){const x=236+k*32,y=24;pbox(x,y,28,30,'#333',k<B.hp?(B.hp<=3?(blink(4)?'#ff0055':'#aa0033'):YEL):'#111')}
-    const tags=[];if(SPD!==B.spd0)tags.push('SPEED '+Math.round(SPD*100)+'%');if(B.hold2)tags.push('HOLD '+BOSSC.hold+'s');if(GWB>GW)tags.push('GOAL +'+(GWB-GW));if(B.tilt)tags.push('TILT');
+    const tags=[];if(SPD!==B.spd0)tags.push('SPEED '+Math.round(SPD*100)+'%');if(B.hold2)tags.push('HOLD '+BOSSC.hold+'s');if(WB.cl||WB.cr)tags.push('WALL '+Math.round((WB.cl+WB.cr)/(2*WSEG)*100)+'%');if(B.tilt)tags.push('TILT');
     tags.forEach((t,k)=>{pbox(236+k*92,66,88,26,'#ff0055','#200');ptext(t,236+k*92+44,80,7,'#fff')});
     if(B.tele>0){ptext('▶ '+BOSS_NAME[B.teleK],FW/2,MID-72,22,'#ff3366',DOT);if(B.hint&&B.teleK==='twin')ptext('当たる直前に指を離すとパリィ！',FW/2,MID+90,18,YEL,DOT)}
     if(B.cap>0)ptext(B.capTxt,FW/2,MID+150,22,B.capTxt==='SAFE!'||B.capTxt.startsWith('RESTORE')?YEL:'#fff',DOT);
@@ -1974,7 +1991,7 @@ if(window.visualViewport)visualViewport.addEventListener('resize',resizeSoon);
 if(document.fonts&&document.fonts.load){document.fonts.load('20px "Press Start 2P"');document.fonts.load('20px DotGothic16')}
 requestAnimationFrame(loop);
 // 開発・テスト用（?debug のときだけ）：状態の参照と論理座標→画面座標
-if(/[?&]debug/.test(location.search))window.__AH={get SPD(){return SPD},get cpu(){return cpu},get TH(){return TH},POST,BOSS,get GWB(){return GWB},SUP,get PAR(){return PAR},get hitstop(){return hitstop},get shake(){return shake},hit:(...a)=>hit(...a),NET,LOB,get P(){return P},puck,get arm(){return arm},get drags(){return [...drags.values()]},get placed(){return placed},get state(){return state},get mode(){return mode},get live(){return live},get ts(){return ts},get fx(){return fx},get viewFlip(){return viewFlip},
+if(/[?&]debug/.test(location.search))window.__AH={get SPD(){return SPD},get cpu(){return cpu},get TH(){return TH},POST,BOSS,WB,SUP,get PAR(){return PAR},get hitstop(){return hitstop},get shake(){return shake},hit:(...a)=>hit(...a),NET,LOB,get P(){return P},puck,get arm(){return arm},get drags(){return [...drags.values()]},get placed(){return placed},get state(){return state},get mode(){return mode},get live(){return live},get ts(){return ts},get fx(){return fx},get viewFlip(){return viewFlip},
   scr(x,y){if(viewFlip){x=FW-x;y=TL-y}return rot?{x:VX+OX+y*S,y:VY+OY+(FW-x)*S}:{x:VX+OX+x*S,y:VY+OY+y*S}},give(i,k){P[i].items.push(k)},spawnFx(k,x,y,sc,col,ex){const f=addFx(k,x,y,sc,'',col);if(f&&ex)Object.assign(f,ex);return !!f},setTH(o){Object.assign(TH,o);applyTheme()},rx,pdown,ctl};
 }
 </script>
