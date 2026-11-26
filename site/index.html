@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.60">
+<meta name="version" content="1.61">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.60'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.61'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 /* 新しい版の確認：起動時とアプリに戻ったときに、キャッシュを使わずに公開中のページの版を読み、新しければタイトル画面で読み込み直す（別のURLにして古いキャッシュを避ける） */
 function verCheck(){try{fetch(location.pathname+'?vc='+Date.now(),{cache:'no-store'}).then(r=>r.text()).then(t=>{const m=t.match(/<meta name="version" content="([0-9.]+)">/);
   if(!m||+m[1]<=+VER)return;const go=()=>{const q=new URLSearchParams(location.search);if(q.get('v')===m[1])return;q.set('v',m[1]);location.replace(location.pathname+'?'+q)};
@@ -701,7 +701,7 @@ function bossUpdate(dt){const B=BOSS;if(!B.on)return;
 /* ボスのゴール処理（goal から呼ぶ）。戻り値 true＝試合終了 */
 function bossGoal(scorer,parGoal){const B=BOSS;
   B.stance=0;B.rush=0;B.steal=0;B.tele=0;B.teleK=null;B.cool=2.5;B.round++;
-  if(scorer===0){const dmg=parGoal?BOSSC.par2:1;B.hp=Math.max(0,B.hp-dmg);if(parGoal){B.par2++;B.cap=2;B.capTxt='PARRY GOAL ×2'}
+  if(scorer===0){const dmg=parGoal?BOSSC.par2:1;B.hp=Math.max(0,B.hp-dmg);if(parGoal&&BOSSC.par2>1){B.par2++;B.cap=2;B.capTxt='PARRY GOAL ×'+BOSSC.par2}
     if(B.rw.length){const k=B.rw.pop();if(k==='spd')SPD=B.spd0;else if(k==='hold')B.hold2=false} // ゴールを決めると書き換えが1つ戻る
     if(B.hp<=0){B.result='win';const t=(performance.now()-B.t0)/1000,bb=bossBest();B.time=t;B.newBest=!bb.best||t<bb.best;try{localStorage.setItem('ah_boss',JSON.stringify({clear:true,best:B.newBest?t:bb.best}))}catch(e){}
       SPD=B.spd0;wallReset();B.tilt=false;B.hold2=false;B.rw=[];bossField();juice(40,.4,2,1.5,'#ffffff');addFx('nulldie',P[1].x,P[1].y,1,'','#3dff7a');return true}
