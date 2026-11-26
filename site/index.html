@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.55">
+<meta name="version" content="1.56">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.55'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.56'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=1680,WIN=7; // MAXV＝パックの最高速（v1.37 で旧ゲームスピード0.8倍を基準＝100%に。パックの速さの値はすべて旧値の0.8倍）
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -334,15 +334,16 @@ function _slide(f0,f1,d,type='square',v=.06){if(!ac)return;try{const o=ac.create
    ファミコンの音源と同じ材料だけで作る：矩形波2つ（デューティ 12.5/25/50%）・段々の三角波（32段）・15ビット LFSR のノイズ（長周期／短周期）。
    1/60秒（1フレーム）ごとに音程・音量（16段階）を段々に変える。フィルター・残響・左右の振り分けは使わない（モノラル）。
    普段の音（打撃・壁・アイテム）は短い無機質な「ピッ」「プッ」。盛り上がる所（ゴール・スマッシュ・パリィ・スーパーシュート・爆発）だけアルペジオや滑る音程で派手に。
+   全体の音程：矩形波は1オクターブ下（PP=.5、iPad のスピーカーで聞こえるよう 100Hz より下には下げない）、三角波は4度下（PT=.75）、ノイズは周期を2段低く（PN=2）。
    フレーム列 F[k]={p1:[周波数,デューティ,音量0-15], p2:[…], t:[周波数], n:[周期0-15, 音量, 短周期]} → 最初に1回だけ波形にして保存（CHIP.cache）して鳴らす。 */
-const CHIP={cache:{},g:null},NPER=[4,8,16,32,64,96,128,160,202,254,380,508,762,1016,2034,4068];
+const CHIP={cache:{},g:null,PP:.5,PT:.75,PN:2},NPER=[4,8,16,32,64,96,128,160,202,254,380,508,762,1016,2034,4068];
 function chipRender(F){const sr=ac.sampleRate,spf=Math.round(sr/60),n=F.length*spf+spf,buf=ac.createBuffer(1,n,sr),d=buf.getChannelData(0);
   let a1=0,a2=0,at=0,lf=1,na=0;
   for(let fi=0;fi<F.length;fi++){const f=F[fi]||{};for(let k=0;k<spf;k++){let o=0;
-    if(f.p1&&f.p1[2]>0){a1=(a1+f.p1[0]/sr)%1;o+=(a1<f.p1[1]?1:-1)*f.p1[2]/15*.2}
-    if(f.p2&&f.p2[2]>0){a2=(a2+f.p2[0]/sr)%1;o+=(a2<f.p2[1]?1:-1)*f.p2[2]/15*.16}
-    if(f.t&&f.t[0]>0){at=(at+f.t[0]/sr)%1;const st=Math.floor(at*32),v=st<16?st:31-st;o+=(v/7.5-1)*.22}
-    if(f.n&&f.n[1]>0){na+=1789773/NPER[f.n[0]]/sr;while(na>=1){na-=1;const b=(lf^(lf>>(f.n[2]?6:1)))&1;lf=(lf>>1)|(b<<14)}o+=((lf&1)?-1:1)*f.n[1]/15*.18}
+    if(f.p1&&f.p1[2]>0){a1=(a1+Math.max(f.p1[0]*CHIP.PP,Math.min(f.p1[0],100))/sr)%1;o+=(a1<f.p1[1]?1:-1)*f.p1[2]/15*.2}
+    if(f.p2&&f.p2[2]>0){a2=(a2+Math.max(f.p2[0]*CHIP.PP,Math.min(f.p2[0],100))/sr)%1;o+=(a2<f.p2[1]?1:-1)*f.p2[2]/15*.16}
+    if(f.t&&f.t[0]>0){at=(at+f.t[0]*CHIP.PT/sr)%1;const st=Math.floor(at*32),v=st<16?st:31-st;o+=(v/7.5-1)*.22}
+    if(f.n&&f.n[1]>0){na+=1789773/NPER[Math.min(15,f.n[0]+CHIP.PN)]/sr;while(na>=1){na-=1;const b=(lf^(lf>>(f.n[2]?6:1)))&1;lf=(lf>>1)|(b<<14)}o+=((lf&1)?-1:1)*f.n[1]/15*.18}
     d[fi*spf+k]=o}}
   return buf}
 function chip(key,make){if(!ac)return;try{if(!CHIP.g){CHIP.g=ac.createGain();CHIP.g.gain.value=.85;CHIP.g.connect(ac.destination)}
