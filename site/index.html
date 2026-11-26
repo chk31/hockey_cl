@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.38">
+<meta name="version" content="1.39">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.38'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.39'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=1680,WIN=7; // MAXV＝パックの最高速（v1.37 で旧ゲームスピード0.8倍を基準＝100%に。パックの速さの値はすべて旧値の0.8倍）
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -155,6 +155,12 @@ function build3D(){
   const seg=(FW-GW)/2,sx=GW/2+seg/2;
   for(const [z,m] of [[-FL/2-T/2,railMs[2]],[FL/2+T/2,railMs[1]]])for(const s of [-1,1])rail(seg,T,s*sx,z,m);
   for(const z of [-FL/2-T/2,FL/2+T/2]){const m=new THREE.Mesh(new THREE.BoxGeometry(GW,2,T),new THREE.MeshBasicMaterial({color:0x000000}));m.position.set(0,0,z);scene.add(m)}
+  // 四隅の丸み：レールと同じ色の階段状ブロック（当たり判定は半径 RC の円）
+  {const CS=8;for(const [cx,cy,sx,sy] of CORNERS){const m=cy<MID?railMs[2]:railMs[1];
+    for(let j=0;j<RC;j+=CS){const dy=RC-(j+CS/2),w=RC-Math.sqrt(Math.max(0,RC*RC-dy*dy));if(w<2)continue;
+      rail(w,CS,(sx<0?w/2:FW-w/2)-FW/2,(sy<0?FY0+j+CS/2:FY1-j-CS/2)-MID,m)}}}
+  // ゴールポスト（ゴール口の両端）：白い柱。当たると光る
+  meshes.posts=[[FW/2-GW/2,FY0],[FW/2+GW/2,FY0],[FW/2-GW/2,FY1],[FW/2+GW/2,FY1]].map(([px,py])=>{const mm=toon({color:0xffffff});const b=sh(hull(new THREE.Mesh(new THREE.BoxGeometry(14,RH+10,14),mm),3));b.position.set(px-FW/2,(RH+10)/2,py-MID);scene.add(b);return mm});
   // マレット
   meshes.mallet=P.map((p,i)=>{
     const gr=new THREE.Group();
@@ -226,6 +232,7 @@ function render3D(){
   const pm=meshes.puck;pm.visible=!puck.boom;
   { // 持ちすぎ警告：赤く明滅（残りが減るほど速く）
     const rem=HOLD-puck.hold,on=state==='play'&&rem<3&&Math.sin(clock*Math.PI*2*(2+(3-rem)*3))>0;
+    if(meshes.posts)meshes.posts.forEach((m,k)=>{const f=POST.fl[k];m.emissive.setRGB(f,f*.85,f*.3)}); // ゴールポストの光
     const sup=puck.sup>=0||SUP.aim>=0;for(const m of meshes.puckMats)m.emissive.set(on?0xff0000:sup?(Math.sin(clock*16)>0?0x0077ee:0x003399):0x000000);
     P.forEach((p,i)=>{const u=meshes.mallet[i].userData;u.mA.emissive.set(p.pw?(Math.sin(clock*10)>0?0x0066cc:0x002266):0x000000)});
   }
@@ -344,6 +351,10 @@ function addFx0(k,x,y,s=1,txt='',col=YEL){
 let lastHit=0;
 function juice(sh,stop,a,fl,col='#ffffff'){relay(['j',sh,stop,a,fl,ck(col)]);hitstop=Math.max(hitstop,stop);if(stop>0&&minimal())stopCue(stop,col); // ヒットストップは FX LEVEL に関係なく発生（MIN でも）
   if(minimal())return;if(lite()){sh*=.2;a=0;fl*=.25}shake=Math.max(shake,sh);ab=Math.max(ab,a);if(fl>flash){flash=fl;fcol=hex(col)}}
+/* 盤面の四隅の丸み（半径 RC）。パック・マレットとも、角の円の内側にとどめる（角に挟まらない） */
+const RC=64,CORNERS=[[RC,FY0+RC,-1,-1],[FW-RC,FY0+RC,1,-1],[RC,FY1-RC,-1,1],[FW-RC,FY1-RC,1,1]];
+function cornerPush(o,r){for(const [cx,cy,sx,sy] of CORNERS){const dx=o.x-cx,dy=o.y-cy;if(dx*sx<=0||dy*sy<=0)continue;const d=Math.hypot(dx,dy),R=RC-r;if(d<=R)return null;
+  const nx=dx/d,ny=dy/d;o.x=cx+nx*R;o.y=cy+ny*R;return [nx,ny]}return null}
 const SMASH=1480; // スマッシュ判定の相対速度。最高速 1680 に近い強打だけ
 function hit(x,y,sp,txt,who=-1,wn=null){
   const t=performance.now();if(t-lastHit<60)return;lastHit=t;
@@ -368,7 +379,8 @@ function explode(side){
 /* ================= スーパーシュート =================
    アイテム欄でタップ → 自機が青いオーラの強化状態に。強化中にパックへ触れるとスロー＋パック停止 → 引っ張って狙い、離すと発射。
    引っ張った方向の逆へ、加速床の最高速で飛ぶ。発射・得点で強化解除。青いオーラのパックを受けた相手は1.5秒スタン */
-const AURA='#33ccff',SUP_SP=2080,SUP_AIM=2.5,STUN=1.5,SUP_RCV=336; // SUP_RCV＝受けたパックが跳ね返る速さ（遅く返して打った側のチャンスに）
+const STOP_MV=.4; // 構え・パリィ停止中に守る側が動ける速さ（倍率）
+const AURA='#33ccff',SUP_SP=2080,SUP_AIM=1.5,STUN=1.5,SUP_RCV=336; // SUP_RCV＝受けたパックが跳ね返る速さ（遅く返して打った側のチャンスに）
 let SUP={aim:-1,t:0,dx:0,dy:-1};
 function superOn(i,slot){const p=P[i];if(p.items[slot]!=='super')return;
   if(p.pw){flashSlot(p,'#666',.3,slot);beep(150,.1,'square',.06);return} // もう強化中
@@ -394,6 +406,11 @@ let PAR={who:-1,t:0,dx:0,dy:-1,sp:2160};
 function canParry(p){if(state!=='play'||p.pw||p.stun>0||p.ptr!=null||!p.relT||(mode==='cpu'&&p.i===1))return false;
   if(puck.lastTouch===p.i||Math.hypot(puck.vx,puck.vy)<PARC.s)return false; // 直前に触ったのが自分なら不可／遅いパックは不可
   return (hnow()-p.relT)/1000<=PARC.w+(p.relRemote?.03:0)} // ゲストは届く揺れぶん少しだけ広く
+/* パリィを狙ったらしいが早く離しすぎたとき（受付時間を過ぎていて 0.35 秒以内）：短い「ブッ」と灰色の小さな輪で知らせる */
+function parryEarly(p){if(state!=='play'||p.pw||p.stun>0||p.ptr!=null||!p.relT||(mode==='cpu'&&p.i===1))return false;
+  if(puck.lastTouch===p.i||Math.hypot(puck.vx,puck.vy)<PARC.s)return false;
+  const age=(hnow()-p.relT)/1000;return age>PARC.w+(p.relRemote?.03:0)&&age<=.35}
+function earlyCue(p){p.relT=0;addFx('wave',p.x,p.y,52,'','#9a9aa6');addFx('impact',p.x,p.y,10,'','');slide(480,150,.13,'square',.07);beep(110,.06,'sawtooth',.05)}
 function parryStart(i,nx,ny){
   const sp0=Math.hypot(puck.vx,puck.vy),vn=puck.vx*nx+puck.vy*ny;let rx=puck.vx-2*vn*nx,ry=puck.vy-2*vn*ny,rl=Math.hypot(rx,ry); // 普通に跳ね返った向き（スワイプしなかったとき用）
   if(rl<1){rx=nx;ry=ny;rl=1}
@@ -503,7 +520,7 @@ function cpuUpdate(dt){
   cpu.t-=dt;cpu.strike=Math.max(0,cpu.strike-dt);cpu.bank=Math.max(0,cpu.bank-dt);
   if(cpu.t<=0&&cpu.strike<=0){cpu.t=LV[lvl].re;cpuDecide()}
   aim(P[1],cpu.tx,cpu.ty);P[1].boost=cpu.strike>0?LV[lvl].pw:1;
-  cpuItems(dt);
+  if(SUP.aim<0&&PAR.who<0)cpuItems(dt);
 }
 const BTN=[{x:70,w:140,m:'cpu',l:0},{x:230,w:140,m:'cpu',l:1},{x:390,w:140,m:'cpu',l:2},{x:70,w:140,m:'2p',l:null},{x:230,w:140,m:'net',l:null},{x:390,w:140,m:'opt',l:null}];
 const TY0=MID+40,BH=72,btnY=b=>b.m==='cpu'?TY0+108:TY0+200;
@@ -545,7 +562,7 @@ const TURN_STATIC=[
 const PEER_CONFIG={debug:1,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'}].concat(TURN_STATIC)}}; // TURN_CFG を設定した場合は、取得した分を後から足す
 if(RELAY_ONLY)PEER_CONFIG.config.iceTransportPolicy='relay';
 try{const q=new URLSearchParams(location.search).get('ps');if(q){const [h,pt]=q.split(':');Object.assign(PEER_CONFIG,{host:h,port:+pt||9000,path:'/',secure:false})}}catch(e){} // 開発用：?ps=localhost:9000 で自前のPeerServer
-const PV=5,PREFIX='aihockey-',DMIN=25,DMAX=120,SNAP_MS=15,TIMEOUT=3000;
+const PV=6,PREFIX='aihockey-',DMIN=25,DMAX=120,SNAP_MS=15,TIMEOUT=3000;
 let viewFlip=false,noFwd=false,rctx=false;
 const NET={turn:0,path:'',role:null,peer:null,ev:null,st:null,gp:null,open:false,code:'',fxq:[],evq:[],snaps:[],applied:null,off:null,lastRx:0,lastSnap:0,lastPing:0,rtt:-1,ptrs:new Map(),myPtr:null,dly:60,jit:10,gap:17,lastHt:0,seq:0,rseq:new Map(),disc:0,cto:0};
 const LOB={sub:'menu',input:'',err:0,busy:false};
@@ -761,9 +778,9 @@ function guestUpdate(dt){
   // 相手のマレットは補間、自分のマレットはローカル即時（ずれが大きいときだけホストへ寄せる）
   const p0=P[0];p0.x=b?a.m[0][0]+(b.m[0][0]-a.m[0][0])*u:a.m[0][0];p0.y=b?a.m[0][1]+(b.m[0][1]-a.m[0][1])*u:a.m[0][1];
   const me=P[1],hm=S[S.length-1].m[1];
-  if(NET.myPtr!=null&&state!=='pause'&&!(me.stun>0)&&SUP.aim<0&&PAR.who<0){
+  if(NET.myPtr!=null&&state!=='pause'&&!(me.stun>0)&&SUP.aim!==1&&PAR.who!==1){
     const inM=placed.some(it=>it.type==='mud'&&Math.hypot(me.x-it.x,me.y-it.y)<IT.mud.r);
-    let dx=me.tx-me.x,dy=me.ty-me.y;const d=Math.hypot(dx,dy),mx=3400*(inM?.4:1)*dt;if(d>mx){dx*=mx/d;dy*=mx/d}
+    let dx=me.tx-me.x,dy=me.ty-me.y;const d=Math.hypot(dx,dy),mx=3400*(inM?.4:1)*(SUP.aim>=0||PAR.who>=0?STOP_MV:1)*dt;if(d>mx){dx*=mx/d;dy*=mx/d}
     me.x+=dx;me.y+=dy;
     if(d<5&&Math.hypot(me.x-hm[0],me.y-hm[1])>40){const q=Math.min(1,dt*10);me.x+=(hm[0]-me.x)*q;me.y+=(hm[1]-me.y)*q}
   }else{const q=Math.min(1,dt*15);me.x+=(hm[0]-me.x)*q;me.y+=(hm[1]-me.y)*q;me.tx=me.x;me.ty=me.y}
@@ -956,15 +973,16 @@ function pdown(id,x,y){
   if(state==='options'){optTap(local(0,x,y),id);return}
   if(state==='dev'){devTap(local(0,x,y));return}
   if(state==='over'){if(overT>1.5){if(mode==='online'){toLobby()}else{state='title';placed.forEach(drop);placed=[];beep(660,.06)}}return}
-  if(PAR.who>=0&&state==='play'){const i=PAR.who,p=P[i];if(ctl(i)&&p.ptr==null&&(i===0?y>MID:y<MID)){p.ptr=id;aim(p,x,y)}return} // 時間停止中：自分の側に指を置いて引っ張って狙う（スーパーシュートと同じ）
+  if(PAR.who>=0&&state==='play'){const i=PAR.who,p=P[i];if(ctl(i)&&(i===0?y>MID:y<MID)){if(p.ptr==null){p.ptr=id;aim(p,x,y)}return}} // 時間停止中：パリィした人は自分の側に指を置いて引っ張って狙う。守る側の指は下の通常処理でマレットを動かす
   if(state==='pause'){const i=y>MID?0:1;if(!pzShow(i)||!ctl(i))return;const h=pauseHit(i,x,y);if(h==='play')resumeGame();else if(h==='quit')quitGame();return}
   for(const i of [0,1]){
     const l=local(i,x,y);
     if(l.v>FY1){if(!ctl(i))return;if(inR(l,{x:PZB.x-8,y:PZB.y-8,w:PZB.w+16,h:PZB.h+16})){pauseGame();return}const s=slotAt(l.u,l.v);
+      if(s>=0&&P[i].items[s]&&(SUP.aim>=0||PAR.who>=0))return; // 構え・パリィ停止中はアイテム欄を使わない
       if(s>=0&&P[i].items[s]&&!live){flashSlot(P[i],'#666',.3,s);beep(150,.1,'square',.06);return}
       if(s>=0&&P[i].items[s]==='super'){superOn(i,s);return} // タップで即使用
       if(s>=0&&P[i].items[s]){
-        if(arm[i]&&arm[i].slot===s){arm[i]=null;slide(600,200,.1,'square',.05);return}
+        if(arm[i]){if(arm[i].slot!==s){flashSlot(P[i],'#666',.3,s);beep(150,.08,'square',.05);return}const a=arm[i];arm[i]=null;drags.set(id,{i,slot:s,type:a.type,x,y,t:a.t});return} // 選んだアイテムはキャンセル・持ち替えできない（もう一度触ると、残り時間のままドラッグに戻る）
         if(![...drags.values()].some(d=>d.i===i)){arm[i]=null;drags.set(id,{i,slot:s,type:P[i].items[s],x,y,t:GRACE});slide(200,600,.12,'square',.05)}}
       return}
   }
@@ -1017,6 +1035,9 @@ function bounceOff(px,py,r,e){
   const vn=puck.vx*nx+puck.vy*ny;if(vn<0){puck.vx-=(1+e)*vn*nx;puck.vy-=(1+e)*vn*ny}
   return Math.max(1,-vn);
 }
+const POST={fl:[0,0,0,0],t:0}; // ゴールポスト（ゴール口の両端）。当たると光る
+function postHit(x,y,v){const k=(x<FW/2?0:1)+(y<MID?0:2);POST.fl[k]=1;const now=performance.now();if(now-POST.t<90||v<60)return;POST.t=now;
+  beep(1568,.05,'square',.06);beep(2349,.16,'triangle',.05,.03);addFx('impact',x,y,clamp(v/12,30,90),'','');if(v>500)juice(6,.03,.3,.08)}
 function wall(x,y,sp){hit(x,y,sp,'',-1,x<=0?[1,0]:x>=FW?[-1,0]:y<=FY0?[0,1]:[0,-1])}
 function bumperHit(it,r){
   const v=bounceOff(it.x,it.y,r,1.25);if(v&&puck.sup>=0)breakItem(it); // スーパーシュート：跳ね返したあと壊れる
@@ -1035,7 +1056,8 @@ function sub(h,ms){
   const inMouth=Math.abs(puck.x-FW/2)<GW/2;
   if(puck.y<FY0+PR&&!inMouth){puck.y=FY0+PR;wall(puck.x,FY0,Math.abs(puck.vy));puck.vy=Math.abs(puck.vy)*.92}
   if(puck.y>FY1-PR&&!inMouth){puck.y=FY1-PR;wall(puck.x,FY1,Math.abs(puck.vy));puck.vy=-Math.abs(puck.vy)*.92}
-  for(const sx of [FW/2-GW/2,FW/2+GW/2])for(const sy of [FY0,FY1]){const v=bounceOff(sx,sy,0,.8);if(v)wall(sx,sy,v)}
+  {const n=cornerPush(puck,PR);if(n){const vn=puck.vx*n[0]+puck.vy*n[1];if(vn>0){puck.vx-=1.92*vn*n[0];puck.vy-=1.92*vn*n[1];hit(puck.x+n[0]*PR,puck.y+n[1]*PR,vn,'',-1,[-n[0],-n[1]])}}} // 丸い角で跳ね返る
+  for(const sx of [FW/2-GW/2,FW/2+GW/2])for(const sy of [FY0,FY1]){const v=bounceOff(sx,sy,0,.8);if(v)postHit(sx,sy,v)}
   if(puck.y<FY0-4){goal(0);return}
   if(puck.y>FY1+4){goal(1);return}
   if(puck.air>0){for(const it of placed)if(it.type==='bumper'&&!it.dead)bumperHit(it,IT.bumper.r);if(placed.some(q=>q.dead))placed=placed.filter(q=>{if(q.dead){drop(q);return false}return true})} // バンパーは空中のパックも止める
@@ -1051,6 +1073,7 @@ function sub(h,ms){
             if(ed<MR+PR){q.x=clamp(cx+ex/ed*(MR+PR),MR,FW-MR);q.y=q.i===0?clamp(cy+ey/ed*(MR+PR),MID+MR,FY1-MR):clamp(cy+ey/ed*(MR+PR),FY0+MR,MID-MR)}}
         }
         if(PAR.who<0&&canParry(P[m.i])&&(puck.vx-m.vx/SPD)*nx+(puck.vy-m.vy/SPD)*ny<0){parryStart(m.i,nx,ny);return} // パリィ成立 → 時間停止
+        if(PAR.who<0&&parryEarly(P[m.i])&&(puck.vx-m.vx/SPD)*nx+(puck.vy-m.vy/SPD)*ny<0)earlyCue(P[m.i]); // 早すぎ
         if(puck.par>=0)puck.par=-1; // パリィのオーラは次に触れたら消える
         puck.lastTouch=m.i; // 最後にパックに触ったマレット（パリィの条件）
         let rcv=false;puck.paT=0;
@@ -1093,7 +1116,7 @@ function sub(h,ms){
   if(sp>lim){puck.vx*=lim/sp;puck.vy*=lim/sp}
 }
 function update(dt){
-  clock+=dt;flash=Math.max(0,flash-dt*4);
+  clock+=dt;for(let k=0;k<4;k++)POST.fl[k]=Math.max(0,POST.fl[k]-dt*4);flash=Math.max(0,flash-dt*4);
   if(guestOn()){guestUpdate(dt);return} // ゲストは物理を回さない
   LOB.err=Math.max(0,LOB.err-dt);NET.disc=Math.max(0,NET.disc-dt);
   if(state==='dev'){devUpdate(dt);return}
@@ -1107,20 +1130,24 @@ function update(dt){
   for(let k=fx.length-1;k>=0;k--)if(fx[k].t>fx[k].life)fx.splice(k,1);
   if(state==='over'){overT+=dt;return}
   if(state==='title'||state==='options'||state==='lobby')return;
-  if(PAR.who>=0&&state==='play'){PAR.t-=dt;const a=superAimDir(PAR.who);if(a){PAR.dx=a.dx;PAR.dy=a.dy}if(PAR.t<=0)parryFire(PAR.dx,PAR.dy);return} // パリィ：0.5 秒すべて止まる（時間切れは跳ね返った向きへ）
+  if(PAR.who>=0&&state==='play'){PAR.t-=dt;const a=superAimDir(PAR.who);if(a){PAR.dx=a.dx;PAR.dy=a.dy}if(PAR.t<=0)parryFire(PAR.dx,PAR.dy)} // パリィ：パックとタイマーは止まる（時間切れは狙いの向きへ）。守る側は下で40%の速さで動ける
   cpuUpdate(dt);
   if(SUP.aim>=0&&state==='play'){const i=SUP.aim;SUP.t-=dt;const a=superAimDir(i);if(a){SUP.dx=a.dx;SUP.dy=a.dy}
-    if(mode==='cpu'&&i===1){if(SUP.t<SUP_AIM-.6){const dx=FW/2+rnd(-80,80)-puck.x,dy=FY1+40-puck.y,d=Math.hypot(dx,dy);SUP.dx=dx/d;SUP.dy=dy/d;superFire()}} // CPU：少し狙ってゴールへ
+    if(mode==='cpu'&&i===1){if(SUP.t<SUP_AIM-.6){const dx=FW/2+(P[0].x>FW/2?-1:1)*rnd(40,90)-puck.x,dy=FY1+40-puck.y,d=Math.hypot(dx,dy);SUP.dx=dx/d;SUP.dy=dy/d;superFire()}} // CPU：少し狙ってゴールへ
     else if(SUP.t<=0)superFire()} // 時間切れはその時の向きで自動発射
   const ms=P.map(p=>{
-    if(SUP.aim>=0){p.vx=p.vy=0;return {i:p.i,ox:p.x,oy:p.y,nx:p.x,ny:p.y,vx:0,vy:0,x:p.x,y:p.y}} // スーパーシュートの構え中は両者とも動けない（狙いは指の位置で決まる）
-    if(p.stun>0){p.stun=Math.max(0,p.stun-dt);p.vx=p.vy=0;return {i:p.i,ox:p.x,oy:p.y,nx:p.x,ny:p.y,vx:0,vy:0,x:p.x,y:p.y}} // スタン中は動けない
-    const ox=p.x,oy=p.y;let dx=p.tx-ox,dy=p.ty-oy;const inM=placed.some(it=>it.type==='mud'&&Math.hypot(ox-it.x,oy-it.y)<IT.mud.r);const d=Math.hypot(dx,dy),mx=(p.maxV||3400)*(p.boost||1)*(inM?.4:1)*dt; // 人の指に追従するマレットは実時間、CPUは世界の速度に合わせる
+    const stopNow=SUP.aim>=0||PAR.who>=0&&state==='play'; // スーパーシュートの構え・パリィの停止中
+    if(stopNow&&(p.i===SUP.aim||p.i===PAR.who)){p.vx=p.vy=0;return {i:p.i,ox:p.x,oy:p.y,nx:p.x,ny:p.y,vx:0,vy:0,x:p.x,y:p.y}} // 狙っている人は動かない（狙いは指の位置で決まる）
+    if(p.stun>0){if(!stopNow)p.stun=Math.max(0,p.stun-dt);p.vx=p.vy=0;return {i:p.i,ox:p.x,oy:p.y,nx:p.x,ny:p.y,vx:0,vy:0,x:p.x,y:p.y}} // スタン中は動けない
+    const ox=p.x,oy=p.y;let dx=p.tx-ox,dy=p.ty-oy;const inM=placed.some(it=>it.type==='mud'&&Math.hypot(ox-it.x,oy-it.y)<IT.mud.r);const d=Math.hypot(dx,dy),mx=(p.maxV||3400)*(p.boost||1)*(inM?.4:1)*(stopNow?STOP_MV:1)*dt; // 人の指に追従するマレットは実時間、CPUは世界の速度に合わせる
     if(inM&&d>5&&Math.random()<dt*10)addFx('mud',ox+rnd(-30,30),oy+rnd(-30,30),.7,'bub');
     if(d>mx){dx*=mx/d;dy*=mx/d}
-    p.x=ox+dx;p.y=oy+dy;p.vx=dx/dt;p.vy=dy/dt; // マレットの速度（実時間）
+    p.x=ox+dx;p.y=oy+dy;cornerPush(p,MR);
+    if(stopNow){const ex=p.x-puck.x,ey=p.y-puck.y,ed=Math.hypot(ex,ey)||1,K=MR+PR+30;if(ed<K){p.x=puck.x+ex/ed*K;p.y=puck.y+ey/ed*K;p.x=clamp(p.x,MR,FW-MR);p.y=p.i===0?clamp(p.y,MID+MR,FY1-MR):clamp(p.y,FY0+MR,MID-MR)}} // 止まっているパックには近づけない
+    p.vx=(p.x-ox)/dt;p.vy=(p.y-oy)/dt; // マレットの速度（実時間）
     return {i:p.i,ox,oy,nx:p.x,ny:p.y,vx:p.vx,vy:p.vy,x:ox,y:oy};
   });
+  if(PAR.who>=0&&state==='play')return; // パリィの停止中はパック・タイマーを止めておく
   if(!isFinite(puck.x)||!isFinite(puck.y)||!isFinite(puck.vx)||!isFinite(puck.vy)||puck.x<-50||puck.x>FW+50){serve(puck.y<MID?1:0)}
   if(state==='goal'){goalT-=dt;if(goalT<=0){state='play';serve(1-lastScorer)}return}
   const N=6;
@@ -1592,7 +1619,7 @@ function drawSuper(){
     if(!auraSpr(AURA_IMG.p,puck.x,puck.y,112,5))auraRing(puck.x,puck.y,PR+10,12,clock*4)}
   if(SUP.aim>=0){const i=SUP.aim,p=P[i];let dx=SUP.dx,dy=SUP.dy,fp=null; // 構え：パックの周りに残り時間、発射方向の点線、指からの引っ張り線
     const mine=NET.role==='guest'?(i===1&&NET.myPtr!=null):p.ptr!=null;if(mine&&p.fx!=null){const ax=puck.x-p.fx,ay=puck.y-p.fy,d=Math.hypot(ax,ay);if(d>=20){dx=ax/d;dy=ay/d;fp={x:p.fx,y:p.fy}}}
-    if(!auraSpr(AURA_IMG.p,puck.x,puck.y,112,2))auraRing(puck.x,puck.y,PR+12,12,clock*3);ring(puck.x,puck.y,PR+34,SUP.t,AURA);
+    if(!auraSpr(AURA_IMG.p,puck.x,puck.y,112,2))auraRing(puck.x,puck.y,PR+12,12,clock*3);ring(puck.x,puck.y,PR+34,SUP.t*GRACE/SUP_AIM,AURA);
     for(let k=1;k<=10;k++){const x=puck.x+dx*(PR+20+k*22),y=puck.y+dy*(PR+20+k*22);sq(x,y,k%2?12:8,'#000');sq(x,y,k%2?9:6,blink(8)===!!(k%2)?AURA:'#fff')}
     if(fp){const n=Math.floor(Math.hypot(puck.x-fp.x,puck.y-fp.y)/16);for(let k=1;k<n;k++)sq(fp.x+(puck.x-fp.x)*k/n,fp.y+(puck.y-fp.y)*k/n,4,'#fff')}}
 }
@@ -1601,7 +1628,10 @@ function drawGoalDeco(){
 }
 function drawUI(){
   g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,ui.width,ui.height);base();
-  if(!has3D){g.fillStyle='#16206a';g.fillRect(0,FY0,FW,FL);P.forEach(p=>sq(p.x,p.y,MR*2,COL[p.i]));sq(puck.x,puck.y,PR*2,'#fff');
+  if(!has3D){g.fillStyle='#16206a';g.fillRect(0,FY0,FW,FL);
+    for(const [cx,cy,sx,sy] of CORNERS){g.fillStyle=COL[cy<MID?1:0];for(let j=0;j<RC;j+=8){const dy=RC-(j+4),w=RC-Math.sqrt(RC*RC-dy*dy);g.fillRect(sx<0?0:FW-w,sy<0?FY0+j:FY1-j-8,w,8)}}
+    [[FW/2-GW/2,FY0],[FW/2+GW/2,FY0],[FW/2-GW/2,FY1],[FW/2+GW/2,FY1]].forEach(([x,y],k)=>sq(x,y,14,POST.fl[k]>.1?YEL:'#fff'));
+    P.forEach(p=>sq(p.x,p.y,MR*2,COL[p.i]));sq(puck.x,puck.y,PR*2,'#fff');
     P.forEach(p=>{if(p.box.on)sq(p.box.x,p.box.y,52,COL[p.i])});placed.forEach(it=>spr(it.type,it.x,it.y,IT[it.type].r*2,fwd(it.o)))}
   noFwd=true;trail();noFwd=false;
   landMark();
@@ -1660,7 +1690,7 @@ if(window.visualViewport)visualViewport.addEventListener('resize',resizeSoon);
 if(document.fonts&&document.fonts.load){document.fonts.load('20px "Press Start 2P"');document.fonts.load('20px DotGothic16')}
 requestAnimationFrame(loop);
 // 開発・テスト用（?debug のときだけ）：状態の参照と論理座標→画面座標
-if(/[?&]debug/.test(location.search))window.__AH={get SPD(){return SPD},get cpu(){return cpu},SUP,get PAR(){return PAR},get hitstop(){return hitstop},get shake(){return shake},hit:(...a)=>hit(...a),NET,LOB,get P(){return P},puck,get arm(){return arm},get drags(){return [...drags.values()]},get placed(){return placed},get state(){return state},get mode(){return mode},get live(){return live},get ts(){return ts},get fx(){return fx},get viewFlip(){return viewFlip},
+if(/[?&]debug/.test(location.search))window.__AH={get SPD(){return SPD},get cpu(){return cpu},POST,SUP,get PAR(){return PAR},get hitstop(){return hitstop},get shake(){return shake},hit:(...a)=>hit(...a),NET,LOB,get P(){return P},puck,get arm(){return arm},get drags(){return [...drags.values()]},get placed(){return placed},get state(){return state},get mode(){return mode},get live(){return live},get ts(){return ts},get fx(){return fx},get viewFlip(){return viewFlip},
   scr(x,y){if(viewFlip){x=FW-x;y=TL-y}return rot?{x:VX+OX+y*S,y:VY+OY+(FW-x)*S}:{x:VX+OX+x*S,y:VY+OY+y*S}},give(i,k){P[i].items.push(k)},spawnFx(k,x,y,sc,col,ex){const f=addFx(k,x,y,sc,'',col);if(f&&ex)Object.assign(f,ex);return !!f},setTH(o){Object.assign(TH,o);applyTheme()},rx,pdown,ctl};
 }
 </script>
