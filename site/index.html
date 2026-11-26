@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.49">
+<meta name="version" content="1.50">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.49'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.50'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=1680,WIN=7; // MAXV＝パックの最高速（v1.37 で旧ゲームスピード0.8倍を基準＝100%に。パックの速さの値はすべて旧値の0.8倍）
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -347,6 +347,7 @@ function slide(...a){relay(['s','slide',a]);if(!rctx)_slide(...a)}
    fly    : 取ったアイテムが欄へ飛ぶ（txt＝アイテム種類） */
 const FX_LIFE={impact:.45,wave:.5,smash:.6,speed:.4,mud:.6,goal:2.2,spawn:.7,fly:.5,early:.75,nulldie:2.4};
 const MUD_LIFE={in:.6,out:.6,bub:.7,drop:1.4};
+let FXWHO=null; // エフェクトの持ち主を直接指定するとき（ゴールの爆発の弾けなど）
 function addFx(k,x,y,s=1,txt='',col=YEL){
   const o=addFx0(k,x,y,s,txt,col);
   if(!relayOn())return o;
@@ -360,7 +361,7 @@ function addFx0(k,x,y,s=1,txt='',col=YEL){
     if(k==='impact'&&fx.filter(f=>f.k==='impact').length>=2)return null;if(k==='impact'||k==='wave')s*=.6}
   if(fx.length>90)fx.shift();
   const o={k,x,y,s,txt,col,t:0,a0:Math.random()*6,life:k==='mud'?(MUD_LIFE[txt]||.6):FX_LIFE[k],i:y>MID?0:1};fx.push(o);
-  o.who=col===COL[1]?1:col===COL[0]?0:o.i; // 持ち主＝その人の色（打った人・点を取った人）、色がなければ場所の側
+  o.who=FXWHO!=null?FXWHO:col===COL[1]?1:col===COL[0]?0:o.i; // 持ち主＝指定（FXWHO）＞その人の色（打った人・点を取った人）＞場所の側
   withSide(o.who,()=>fxLife(o,k));return o}
 function fxLife(o,k){
   if(k==='stop')o.life=o.s+.22; // ヒットストップの長さ＋少しの余韻
@@ -456,8 +457,8 @@ function goal(scorer){
   const parGoal=puck.par===0; // パリィで返した球のゴール（ボス戦は2ダメージ）
   superClear(); // 点が入ったら強化・スタン・構えを解除
   P[scorer].score++;lastScorer=scorer;goalT=2.2;state='goal';flash=0;juice(30,.15,1.5,1,COL[scorer]);railFlash=2;noise(.6,.2);
-  const gy=scorer===0?FY1:FY0;addFx('goal',FW/2,gy,1,'',COL[scorer]); // ゴールの爆発は点を取った人の側（自分のゴール側から盤面へ）
-  for(let k=0;k<6;k++)setTimeout(()=>{addFx('impact',FW/2+rnd(-200,200),gy+(gy<MID?1:-1)*rnd(20,300),rnd(60,110),'','');noise(.15,.08)},k*120);
+  const gy=scorer===0?FY0:FY1;addFx('goal',FW/2,gy,1,'',COL[scorer]); // 爆発は点を取られた側のゴール。描き方（STYLE・COLOR）は点を取った人の設定
+  for(let k=0;k<6;k++)setTimeout(()=>{FXWHO=scorer;addFx('impact',FW/2+rnd(-200,200),gy+(gy<MID?1:-1)*rnd(20,300),rnd(60,110),'','');FXWHO=null;noise(.15,.08)},k*120);
   rally=0;lastHitter=-1;
   seq([784,988,1175,1568,1568,0,1568],.07,'square',.07);
   if(BOSS.on){if(bossGoal(scorer,parGoal)){state='over';overT=0;if(BOSS.result==='win')setTimeout(()=>_seq([523,659,784,1047,0,1047,1319,1568,2093],.1,'square',.07),400);else setTimeout(()=>_seq([392,330,262,196],.14,'square',.07),400)}return}
@@ -792,7 +793,7 @@ function hostFlush(){
   if(NET.role!=='host'||!NET.open||mode!=='online')return;
   const now=hnow();
   if(NET.fxq.length){
-    const l=NET.fxq.map(r=>{const m=r.m.slice();if(m[0]==='f'){const o=r.o||{},x={};for(const k of ['nx','ny','ang','tx','ty'])if(o[k]!=null)x[k]=o[k];m.push(x)}return [now,...m]});
+    const l=NET.fxq.map(r=>{const m=r.m.slice();if(m[0]==='f'){const o=r.o||{},x={};for(const k of ['nx','ny','ang','tx','ty','who'])if(o[k]!=null)x[k]=o[k];m.push(x)}return [now,...m]});
     NET.fxq=[];send({t:'ev',l});
   }
   if((state==='play'||state==='goal'||state==='over'||state==='pause')&&now-NET.lastSnap>=SNAP_MS){NET.lastSnap=now;send(snapMsg(now),true)}
@@ -1351,13 +1352,13 @@ function trail(){
   const FIRE=FXT.fire,RB=FXT.tr;
   if(nullS()){g.save();g.textAlign='center';g.textBaseline='middle';const C=FXT.spk,fr=Math.floor(clock*16);
     puck.trail.forEach((t,k)=>{if(t.sp<300||k===n-1)return;const q=k/n,hot=t.sp>1120,sz=snap((hot?26:20)*q+6,2);gtx(NGL[(k*7+fr+Math.floor(t.x/40))%NGL.length],t.x,t.y,sz,hot?(k%2?'#ffffff':C[3]):C[k%3])});
-    g.restore();if(!lite()&&puck.air===0&&Math.hypot(puck.vx,puck.vy)>1120&&Math.random()<.6)addFx('impact',puck.x,puck.y,8,'','');return}
+    g.restore();if(!lite()&&puck.air===0&&Math.hypot(puck.vx,puck.vy)>1120&&Math.random()<.6){FXWHO=puck.lastTouch>=0?puck.lastTouch:null;addFx('impact',puck.x,puck.y,8,'','');FXWHO=null}return}
   puck.trail.forEach((t,k)=>{if(t.sp<400||k===n-1)return;const q=k/n,hot=t.sp>1120;
     if(web90()){const sz=snap(PR*1.1*q,2);if(sz<4)return;const x=snap(t.x,4),y=snap(t.y,4),c=(hot?FIRE:RB)[k%(hot?4:6)];g.fillStyle='#000';g.fillRect(x-sz/2-2,y-sz/2-2,sz+4,sz+4);g.fillStyle=c;g.fillRect(x-sz/2,y-sz/2,sz,sz);g.fillStyle='#fff';g.fillRect(x-sz/2,y-sz/2,sz,2);return} // 点線のような小さな四角の軌跡
     if(kawaii()){ks(hot?'star':KSH[k%2?0:3],t.x+Math.sin(clock*12+k)*4,t.y+Math.cos(clock*12+k)*4,PR*(hot?1.6:1.2)*q*(1+.2*Math.sin(clock*20+k)),(hot?FIRE:RB)[(k+Math.floor(clock*12))%(hot?4:6)],clock*4+k*.7);return}
     if(hot){for(let j=0;j<3;j++)sq(t.x+(hash(k*3+j+clock)-.5)*PR*q,t.y+(hash(k*5+j+clock)-.5)*PR*q,snap(PR*1.5*q*(1-j*.25),3),FIRE[(j+k)%4])}
     else sq(t.x,t.y,snap(PR*1.4*q,6),RB[(k+Math.floor(clock*20))%6])});
-  if(!lite()&&puck.air===0&&Math.hypot(puck.vx,puck.vy)>1120&&Math.random()<.6)addFx('impact',puck.x,puck.y,8,'','');
+  if(!lite()&&puck.air===0&&Math.hypot(puck.vx,puck.vy)>1120&&Math.random()<.6){FXWHO=puck.lastTouch>=0?puck.lastTouch:null;addFx('impact',puck.x,puck.y,8,'','');FXWHO=null}
 }
 /* ===== かわいい系エフェクト：ドットのハート・星・キラキラ ===== */
 const KMASK={heart:['.XX.XX.','XWXXXXX','XXXXXXX','.XXXXX.','..XXX..','...X...'],
@@ -1572,7 +1573,7 @@ function drawNull(f){
     for(let c=0;c<cols;c++){const x=FW/2+(c-(cols-1)/2)*26,h=(140+hash(c*7)*260)*eOut(q)*out,n=Math.floor(h/18),col=FXT.goal||T[Math.floor(c/cols*T.length)%T.length];
       for(let k=0;k<n;k++)gtx(NGL[(k*5+c*3+fr)%NGL.length],x,f.y+dir*(20+k*18),k===n-1?16:13,k===n-1?'#ffffff':col)}
     gtx('|/\\[]{}()01;:._-*+#@$'.slice(0,Math.ceil(21*q)),FW/2,f.y+dir*8,12,C[0]);
-    if(!lite()&&p>.3){for(let k=0;k<40;k++){const x=snap(hash(k)*FW,6),y=(f.y<MID?FY0:MID)+((hash(k+9)*FL/2+(p-.3)*420*(1+hash(k+3)))%(FL/2));gtx(ngl(k+fr),x,y,10,C[k%3])}}}
+    if(!lite()&&p>.3){for(let k=0;k<40;k++){const x=snap(hash(k)*FW,6),y=(f.y<MID?MID:FY0)+((hash(k+9)*FL/2+(p-.3)*420*(1+hash(k+3)))%(FL/2));gtx(ngl(k+fr),x,y,10,C[k%3])}}}
   g.restore();return true}
 function drawNullDie(f){ // ボス撃破：緑の輪 → 赤い ERR!! と XXX → 緑の記号の雨で消える
   const p=clamp(f.t/f.life,0,.999),fr=Math.floor(f.t*18);g.save();g.textAlign='center';g.textBaseline='middle';
