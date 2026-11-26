@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.44">
+<meta name="version" content="1.45">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.44'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.45'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=1680,WIN=7; // MAXV＝パックの最高速（v1.37 で旧ゲームスピード0.8倍を基準＝100%に。パックの速さの値はすべて旧値の0.8倍）
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -415,12 +415,13 @@ function earlyCue(p){p.relT=0;addFx('early',p.x,p.y,1,'','#b8b8c8');beep(392,.06
 function parryStart(i,nx,ny){
   const sp0=Math.hypot(puck.vx,puck.vy),vn=puck.vx*nx+puck.vy*ny;let rx=puck.vx-2*vn*nx,ry=puck.vy-2*vn*ny,rl=Math.hypot(rx,ry); // 普通に跳ね返った向き（スワイプしなかったとき用）
   if(rl<1){rx=nx;ry=ny;rl=1}
-  if(BOSS.on&&i===0){BOSS.parries++;BOSS.delay=BOSSC.parDelay}
+  if(BOSS.on&&i===0)BOSS.parries++;
   PAR={who:i,t:PARC.t,T:PARC.t,dx:rx/rl,dy:ry/rl,sp:clamp(sp0*1.2,1728,2080)};
   puck.vx=puck.vy=0;puck.sup=-1;puck.par=-1;P[i].relT=0;
   addFx('wave',puck.x,puck.y,140,'',COL[i]);addFx('impact',puck.x,puck.y,70,'',COL[i]);juice(10,0,.8,.35,COL[i]);
   slide(280,2600,.3,'sawtooth',.07);slide(560,3400,.34,'square',.04);beep(2637,.14,'triangle',.06,.3)} // キュイーン：上がっていくうなり＋高い余韻
-function parryFire(dx,dy){const i=PAR.who;if(i<0)return;puck.lastTouch=i;const l=Math.hypot(dx,dy)||1;PAR.who=-1;
+function parryFire(dx,dy){const i=PAR.who;if(i<0)return;if(BOSS.on&&i===0)BOSS.delay=BOSSC.parDelay; // ボス戦：時間停止が終わってから0.5秒、ボスは動けない
+  puck.lastTouch=i;const l=Math.hypot(dx,dy)||1;PAR.who=-1;
   puck.vx=dx/l*PAR.sp*PAR_A0;puck.vy=dy/l*PAR.sp*PAR_A0;puck.paV=PAR.sp;puck.paT=puck.paT0=PAR_AT;puck.boostT=1.125;puck.par=i;puck.parT=2;puck.land=0;
   {const f=addFx('speed',puck.x,puck.y,1);if(f){f.nx=dx/l;f.ny=dy/l}}addFx('impact',puck.x,puck.y,90,'',COL[i]);juice(14,.05,.9,.2,COL[i]);slide(500,2200,.16,'square',.07);noise(.18,.1)}
 function serve(side){live=false;puck.boom=false;puck.paT=0;puck.sup=-1;puck.par=-1;puck.lastTouch=-1;PAR.who=-1;puck.hold=0;puck.side=side;puck.x=FW/2;puck.y=side===0?MID+170:MID-170;puck.vx=puck.vy=0;puck.air=0;puck.trail=[]}
@@ -531,7 +532,7 @@ function cpuUpdate(dt){
    プレイヤーの技とルールを盗んで使うボス。HP10（ゴール1点で1、パリィで返した球のゴールは2）。プレイヤーはライフ5。
    技の前兆はすべてボス陣地の「次の技ボックス」で分かる（いつも次の技の絵、使う1秒前に光って揺れ、名前が出る）。
    第1段階（HP10〜7）コピー／第2段階（6〜4）強奪／最終段階（3〜1）越境＝ルールの書き換え（メタ技）。 */
-const BOSSC={hp:10,lives:5,par2:2,flinch:1.5,whiff:2,wallFl:2.5,restore:3.5,parDelay:.5,tele:1.0,wallHP:2,spd:1.3,hold:2,widen:60,widenMax:120,tilt:120,rush:2.2,hudT:5,steal:2.5}; // 【調整値】
+const BOSSC={wallEvery:2,hp:10,lives:5,par2:2,flinch:1.5,whiff:2,wallFl:2.5,restore:3.5,parDelay:.5,tele:1.0,wallHP:2,spd:1.3,hold:2,widen:60,widenMax:120,tilt:120,rush:2.2,hudT:5,steal:2.5}; // 【調整値】
 const BOSS={on:false};
 const BOSS_ROT={1:['twin','wall'],2:['bparry','bsuper','steal','twin'],3:['wallbreak','rush','hud','bsuper','bparry']};
 const BOSS_NAME={twin:'ツイン加速ショット',wall:'メガバンパー',bparry:'パリィの構え',bsuper:'スーパーシュート',steal:'アイテムどろぼう',wallbreak:'ゴールの壁を壊す',rush:'とっしん',hud:'アイテム欄を壊す'};
@@ -543,7 +544,7 @@ function bossStart(){
   const spd0=BOSS.on?BOSS.spd0:SPD;
   start('cpu',3);
   Object.assign(BOSS,{on:true,hp:BOSSC.hp,lives:BOSSC.lives,phase:1,rot:{1:0,2:0,3:0},next:'twin',cool:1.4,tele:0,teleK:null,wait:0,stance:0,rush:0,steal:0,slotX:[0,0],
-    rw:[],hold2:false,tilt:false,spd0,t0:performance.now(),parries:0,par2:0,fails:{1:0,2:0,3:0},banner:{t:2.4,a:'BOSS',b:'NULL'},rwT:0,hint:true,result:null,cap:0,capTxt:''});
+    rw:[],hold2:false,tilt:false,spd0,round:0,wallRound:-9,t0:performance.now(),parries:0,par2:0,fails:{1:0,2:0,3:0},banner:{t:2.4,a:'BOSS',b:'NULL'},rwT:0,hint:true,result:null,cap:0,capTxt:''});
   SPD=spd0;GWB=GW;P[1].maxV=LV[3].sp;bossField();serve(1);
 }
 function bossOff(){if(!BOSS.on)return;BOSS.on=false;SPD=BOSS.spd0;GWB=GW;bossField()}
@@ -557,8 +558,9 @@ function bossReady(k){const B=BOSS;
   if(k==='twin')return puck.y<MID-60&&puck.air===0;
   if(k==='steal')return P[0].box.on;
   if(k==='bsuper')return !P[1].pw;
-  if(k==='wall')return !placed.some(q=>q.mega&&!q.dead); // メガバンパーは重ねない（残っている間は出さない）
+  if(k==='wall')return wallOk(); // メガバンパーは重ねない・2ラウンドに1回まで
   return true}
+const wallOk=()=>!placed.some(q=>q.mega&&!q.dead)&&BOSS.round-BOSS.wallRound>=BOSSC.wallEvery; // ラウンド＝1点ごと
 function bossNext(){const B=BOSS,R=BOSS_ROT[B.phase];B.rot[B.phase]=(B.rot[B.phase]+1)%R.length;B.next=R[B.rot[B.phase]]}
 function bossPlaceBoost(x,y,dx,dy){placed.push({id:++pid,type:'boost',x,y,o:1,age:0,life:3.4,hit:0,mesh:null,dx,dy,boss:true})}
 function bossExec(k){const B=BOSS,b=P[1];
@@ -567,7 +569,7 @@ function bossExec(k){const B=BOSS,b=P[1];
     for(const L of [130,270]){const x=clamp(puck.x+dx*L,60,FW-60),y=clamp(puck.y+dy*L,FY0+80,FY1-160);bossPlaceBoost(x,y,dx,dy)}
     b.x=b.tx=clamp(puck.x-dx*72,MR,FW-MR);b.y=b.ty=clamp(puck.y-dy*72,FY0+MR,MID-MR);
     Object.assign(puck,{vx:dx*760,vy:dy*760,lastTouch:1,sup:-1,par:-1});hit(b.x+dx*MR,b.y+dy*MR,700,'',1);slide(300,1400,.2,'sawtooth',.06)}
-  else if(k==='wall'){ // ボスのゴール前にメガバンパー3つ
+  else if(k==='wall'){B.wallRound=B.round; // ボスのゴール前にメガバンパー3つ
     for(const x of [FW/2-80,FW/2,FW/2+80])placed.push({id:++pid,type:'bumper',x,y:FY0+205,o:1,age:0,life:14,hit:0,mesh:null,mega:true,hp:BOSSC.wallHP});
     setTimeout(()=>{noise(.2,.1);juice(8,0,.4,.1,'#aa55ff')},200)}
   else if(k==='bparry'){B.stance=2.6;_seq([1319,1760],.05,'square',.05)}
@@ -590,12 +592,13 @@ function bossUpdate(dt){const B=BOSS;if(!B.on)return;
   if(B.tele>0&&B.teleK==='twin'&&puck.y<MID-30){cpu.t=.1;cpu.strike=0;aim(P[1],puck.x,Math.max(FY0+MR,puck.y-115));P[1].boost=1} // ツインの前兆中は打たずに球の後ろで待つ
   if(B.tele>0){B.tele-=dt;if(B.tele<=0){bossExec(B.teleK);B.teleK=null;bossNext();B.cool=rnd(3.5,5.5)}return}
   B.cool-=dt;if(B.cool>0)return;
+  if(B.next==='wall'&&!wallOk()){bossNext();return}
   if(bossReady(B.next)){B.tele=BOSSC.tele;B.teleK=B.next;B.wait=0;beep(1760,.05,'square',.05);beep(1760,.05,'square',.05,.12)}
   else{B.wait+=dt;if(B.wait>6){B.wait=0;bossNext()}}
 }
 /* ボスのゴール処理（goal から呼ぶ）。戻り値 true＝試合終了 */
 function bossGoal(scorer,parGoal){const B=BOSS;
-  B.stance=0;B.rush=0;B.steal=0;B.tele=0;B.teleK=null;B.cool=2.5;
+  B.stance=0;B.rush=0;B.steal=0;B.tele=0;B.teleK=null;B.cool=2.5;B.round++;
   if(scorer===0){const dmg=parGoal?BOSSC.par2:1;B.hp=Math.max(0,B.hp-dmg);if(parGoal){B.par2++;B.cap=2;B.capTxt='PARRY GOAL ×2'}
     if(B.rw.length){const k=B.rw.pop();if(k==='spd')SPD=B.spd0;else if(k==='hold')B.hold2=false;else if(k==='wall'){GWB=Math.max(GW,GWB-BOSSC.widen);bossField()}} // ゴールを決めると書き換えが1つ戻る
     if(B.hp<=0){B.result='win';const t=(performance.now()-B.t0)/1000,bb=bossBest();B.time=t;B.newBest=!bb.best||t<bb.best;try{localStorage.setItem('ah_boss',JSON.stringify({clear:true,best:B.newBest?t:bb.best}))}catch(e){}
@@ -1242,7 +1245,8 @@ function update(dt){
   const ms=P.map(p=>{
     const stopNow=SUP.aim>=0||PAR.who>=0&&state==='play'; // スーパーシュートの構え・パリィの停止中
     if(stopNow&&(p.i===SUP.aim||p.i===PAR.who)){p.vx=p.vy=0;return {i:p.i,ox:p.x,oy:p.y,nx:p.x,ny:p.y,vx:0,vy:0,x:p.x,y:p.y}} // 狙っている人は動かない（狙いは指の位置で決まる）
-    if(BOSS.on&&p.i===1&&BOSS.delay>0){p.vx=p.vy=0;return {i:p.i,ox:p.x,oy:p.y,nx:p.x,ny:p.y,vx:0,vy:0,x:p.x,y:p.y}} // パリィされた直後、ボスは少し遅れて動き出す
+    if(BOSS.on&&p.i===1&&(BOSS.delay>0||PAR.who===0)){ // ボス戦：プレイヤーのパリィの時間停止中は完全に止まり、停止後も0.5秒動けない
+      p.vx=p.vy=0;return {i:p.i,ox:p.x,oy:p.y,nx:p.x,ny:p.y,vx:0,vy:0,x:p.x,y:p.y}} // パリィされた直後、ボスは少し遅れて動き出す
     if(p.stun>0){if(!stopNow)p.stun=Math.max(0,p.stun-dt);p.vx=p.vy=0;return {i:p.i,ox:p.x,oy:p.y,nx:p.x,ny:p.y,vx:0,vy:0,x:p.x,y:p.y}} // スタン中は動けない
     const ox=p.x,oy=p.y;let dx=p.tx-ox,dy=p.ty-oy;const inM=placed.some(it=>it.type==='mud'&&Math.hypot(ox-it.x,oy-it.y)<IT.mud.r);const d=Math.hypot(dx,dy),mx=(p.maxV||3400)*(p.boost||1)*(inM?.4:1)*(stopNow?STOP_MV:1)*dt; // 人の指に追従するマレットは実時間、CPUは世界の速度に合わせる
     if(inM&&d>5&&Math.random()<dt*10)addFx('mud',ox+rnd(-30,30),oy+rnd(-30,30),.7,'bub');
