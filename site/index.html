@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.46">
+<meta name="version" content="1.47">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.46'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.47'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=1680,WIN=7; // MAXV＝パックの最高速（v1.37 で旧ゲームスピード0.8倍を基準＝100%に。パックの速さの値はすべて旧値の0.8倍）
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -68,12 +68,15 @@ const THEMES={
     // DIGITAL：白 #FFFFFF／青 #0000FF／灰 #8A8883 の3色＋明るい青1色（暗い盤面で青が沈まないように）
     {n:'DIGITAL',spk:['#ffffff','#0000ff','#8a8883','#5c5cff'],tr:['#ffffff','#0000ff','#8a8883','#ffffff','#0000ff','#5c5cff'],fire:['#ffffff','#0000ff','#8a8883','#ffffff']},
     // CLAUDE：テラコッタ系のオレンジ、クリーム、ウォームグレーの暖色パレット
-    {n:'CLAUDE',spk:['#f0eee6','#d97757','#c15f3c','#b0aea5'],tr:['#d97757','#e8a07f','#f0eee6','#c15f3c','#b0aea5','#f5c4a8'],fire:['#d97757','#c15f3c','#f0eee6','#ffffff']}],
+    {n:'CLAUDE',spk:['#f0eee6','#d97757','#c15f3c','#b0aea5'],tr:['#d97757','#e8a07f','#f0eee6','#c15f3c','#b0aea5','#f5c4a8'],fire:['#d97757','#c15f3c','#f0eee6','#ffffff']},
+    // NULL：端末の緑（明るい緑・薄い緑・深い緑）＋エラーの赤と橙。ボス「NULL」の色
+    {n:'NULL',spk:['#c8ffd8','#3dff7a','#23c45e','#ff3355'],tr:['#ff3355','#ff8a3d','#ffd84a','#3dff7a','#2fd6a8','#c8ffd8'],fire:['#ff3355','#ff8a3d','#3dff7a','#ffffff'],lock:1}],
   lv:[{n:'FULL'},{n:'LITE'},{n:'MIN'}],
-  st:[{n:'ARCADE'},{n:'KAWAII'},{n:'WEB90'},{n:'CLAUDE'}]
+  st:[{n:'ARCADE'},{n:'KAWAII'},{n:'WEB90'},{n:'CLAUDE'},{n:'NULL',lock:1}] // NULL：記号でできたエフェクト（ボス撃破で OPTION に出る）
 };
 let TH={puck:0,field:0,fx:0,st:0,lv:0};
 const kawaii=()=>TH.st===1;
+const nullS=()=>TH.st===4; // NULL：{}[]/01 などの記号が飛び散る・流れる・噴き上がる（impact / smash / goal だけ専用、他は ARCADE）
 const claudeS=()=>TH.st===3; // CLAUDE：吹き出し・考え中の「…」・＊のキラキラ（impact / smash / goal だけ専用、他は ARCADE）
 const web90=()=>TH.st===2; // 90年代Web風：Win95の立体ボタン／ポップアップ窓・虹色のライン・キラキラGIF・マーチングアンツ・工事中テープ・矢印カーソル
 const lite=()=>TH.lv>=1,minimal=()=>TH.lv===2;
@@ -332,7 +335,7 @@ function slide(...a){relay(['s','slide',a]);if(!rctx)_slide(...a)}
    goal   : ゴール演出（大きな演出＋紙吹雪）
    spawn  : アイテムボックス出現
    fly    : 取ったアイテムが欄へ飛ぶ（txt＝アイテム種類） */
-const FX_LIFE={impact:.45,wave:.5,smash:.6,speed:.4,mud:.6,goal:2.2,spawn:.7,fly:.5,early:.75};
+const FX_LIFE={impact:.45,wave:.5,smash:.6,speed:.4,mud:.6,goal:2.2,spawn:.7,fly:.5,early:.75,nulldie:2.4};
 const MUD_LIFE={in:.6,out:.6,bub:.7,drop:1.4};
 function addFx(k,x,y,s=1,txt='',col=YEL){
   const o=addFx0(k,x,y,s,txt,col);
@@ -341,14 +344,15 @@ function addFx(k,x,y,s=1,txt='',col=YEL){
 }
 function addFx0(k,x,y,s=1,txt='',col=YEL){
   if(k==='stop'&&!minimal())return null; // ヒットストップの合図は MIN 専用
-  if(minimal()&&k!=='fly'&&k!=='stop'&&k!=='early')return null; // MIN：アイテムが欄に飛ぶ表示とヒットストップの合図だけ
+  if(minimal()&&k!=='fly'&&k!=='stop'&&k!=='early'&&k!=='nulldie')return null; // MIN：アイテムが欄に飛ぶ表示とヒットストップの合図だけ
   if(lite()){ // LITE：流線・出現・ぬかるみの泡やしずく・小さな火花は出さない。弾け・輪は小さく、弾けは同時2つまで
     if(k==='speed'||k==='spawn'||(k==='mud'&&txt!=='in')||(k==='impact'&&s<24))return null;
     if(k==='impact'&&fx.filter(f=>f.k==='impact').length>=2)return null;if(k==='impact'||k==='wave')s*=.6}
   if(fx.length>90)fx.shift();
   const o={k,x,y,s,txt,col,t:0,a0:Math.random()*6,life:k==='mud'?(MUD_LIFE[txt]||.6):FX_LIFE[k],i:y>MID?0:1};fx.push(o);
   if(k==='stop')o.life=s+.22; // ヒットストップの長さ＋少しの余韻
-  if(claudeS()){const L={impact:1.15,smash:1.3}[k];if(L)o.life*=L} // CLAUDE はコマを見せるため少し長め
+  if(claudeS()){const L={impact:1.15,smash:1.3}[k];if(L)o.life*=L}
+  if(nullS()){const L={impact:1.3,smash:1.25}[k];if(L)o.life*=L} // NULL は記号を見せるため少し長め // CLAUDE はコマを見せるため少し長め
   if(web90()&&k!=='fly'&&k!=='goal'&&k!=='stop')o.life*=.75; // WEB90 は短めに
   if(kawaii()){const L={impact:1.7,wave:1.4,smash:1.5,speed:1.6,mud:1.6,goal:1.25,spawn:1.2}[k];if(L)o.life*=L}
   return o;
@@ -551,8 +555,9 @@ function bossStart(){
   Object.assign(BOSS,{on:true,hp:BOSSC.hp,lives:BOSSC.lives,phase:1,rot:{1:0,2:0,3:0},next:'twin',cool:1.4,tele:0,teleK:null,wait:0,stance:0,rush:0,steal:0,slotX:[0,0],
     rw:[],hold2:false,tilt:false,spd0,round:0,wallRound:-9,t0:performance.now(),parries:0,par2:0,fails:{1:0,2:0,3:0},banner:{t:2.4,a:'BOSS',b:'NULL'},rwT:0,hint:true,result:null,cap:0,capTxt:''});
   SPD=spd0;GWB=GW;P[1].maxV=LV[3].sp;bossField();serve(1);
+  if(!BOSS.th0)BOSS.th0={st:TH.st,fx:TH.fx};TH.st=4;TH.fx=THEMES.fx.length-1;FXT=THEMES.fx[TH.fx]; // ボス戦のエフェクトは NULL（設定は保存しない）
 }
-function bossOff(){if(!BOSS.on)return;BOSS.on=false;SPD=BOSS.spd0;GWB=GW;bossField()}
+function bossOff(){if(!BOSS.on)return;BOSS.on=false;SPD=BOSS.spd0;GWB=GW;bossField();if(BOSS.th0){TH.st=BOSS.th0.st;TH.fx=BOSS.th0.fx;FXT=THEMES.fx[TH.fx];BOSS.th0=null}}
 function bossField(){ // 下のゴールの幅に合わせて、3D の端のレール・ゴール口・ポストを動かす
   if(!has3D||!meshes.endB)return;const seg0=(FW-GW)/2,seg=(FW-GWB)/2;
   for(const {r,s} of meshes.endB){r.scale.x=seg/seg0;r.position.x=s*(GWB/2+seg/2)}
@@ -608,7 +613,7 @@ function bossGoal(scorer,parGoal){const B=BOSS;
   if(scorer===0){const dmg=parGoal?BOSSC.par2:1;B.hp=Math.max(0,B.hp-dmg);if(parGoal){B.par2++;B.cap=2;B.capTxt='PARRY GOAL ×2'}
     if(B.rw.length){const k=B.rw.pop();if(k==='spd')SPD=B.spd0;else if(k==='hold')B.hold2=false;else if(k==='wall'){GWB=Math.max(GW,GWB-BOSSC.widen);bossField()}} // ゴールを決めると書き換えが1つ戻る
     if(B.hp<=0){B.result='win';const t=(performance.now()-B.t0)/1000,bb=bossBest();B.time=t;B.newBest=!bb.best||t<bb.best;try{localStorage.setItem('ah_boss',JSON.stringify({clear:true,best:B.newBest?t:bb.best}))}catch(e){}
-      SPD=B.spd0;GWB=GW;B.tilt=false;B.hold2=false;B.rw=[];bossField();juice(40,.4,2,1.5,'#ffffff');return true}
+      SPD=B.spd0;GWB=GW;B.tilt=false;B.hold2=false;B.rw=[];bossField();juice(40,.4,2,1.5,'#ffffff');addFx('nulldie',P[1].x,P[1].y,1,'','#3dff7a');return true}
     const ph=B.hp<=3?3:B.hp<=6?2:1;
     if(ph!==B.phase){B.phase=ph;B.rot[ph]=0;B.next=BOSS_ROT[ph][0];B.banner={t:2.4,a:'PHASE '+ph,b:ph===2?'強奪':'越境'};
       if(ph===3){SPD=BOSSC.spd;B.hold2=true;B.rw=['hold','spd'];B.rwT=2.2;B.banner.t=0}} // 越境：設定の書き換え（ゴールのたびに1つ戻る）
@@ -1529,6 +1534,40 @@ function drawClaude(f){
         if(y>FY0&&y<FY1)clFrame(sp,sp.h,sp.h,(k+Math.floor(f.t*8))%2,0,x,y,27,27)}}
       clFrame(o,o.h,o.h,Math.min(n-1,Math.floor(Math.min(1,p/.8)*n)),0,l.u,l.v,384,384)})} // 吹き出しは点を取った側から読める向き
   g.restore();return true}
+/* ---- FX STYLE「NULL」：ドット文字の記号でできたエフェクト（参考：ボス用 CODE セット）---- */
+const NGL='{}[]/\;:.01<>=()_-+*#@$!?|';
+const ngl=k=>NGL[Math.floor(hash(k)*NGL.length)];
+function gtx(ch,x,y,size,col){g.font=size+'px '+PIX;g.fillStyle='#000';g.fillText(ch,x+Math.max(1,size/7),y+Math.max(1,size/7));g.fillStyle=col;g.fillText(ch,x,y)}
+function drawNull(f){
+  const p=clamp(f.t/f.life,0,.999),C=FXT.spk;g.save();g.textAlign='center';g.textBaseline='middle';g.imageSmoothingEnabled=false;
+  if(f.k==='impact'){ // 記号が四方へ飛び散る（壁は半円）。最初の一瞬だけ中心にカーソル
+    const tiny=f.s<24,n=tiny?5:16,R=(tiny?26:clamp(f.s*1.9,60,190))*eOut(p),sz=snap((tiny?14:clamp(f.s/3,18,32))*(1-p*.45),2),fr=Math.floor(f.t*20);
+    const base=f.nx!=null?Math.atan2(f.ny,f.nx):0,span=f.nx!=null?Math.PI:Math.PI*2;
+    if(p<.25&&!tiny){gtx('{}[]',f.x,f.y,snap(26*(1-p*2),2),C[0]);sq(f.x,f.y+20,snap(14*(1-p*3),2),C[1])} // 最初の一瞬：中心に記号のかたまりとカーソル
+    for(let k=0;k<n;k++){const a=base-span/2+(k+.5)/n*span+(hash(k+f.a0)-.5)*.3,r=R*(.6+hash(k*3+f.a0)*.5);if(p>.55&&(k+fr)%3===0)continue;
+      g.save();g.translate(f.x+Math.cos(a)*r,f.y+Math.sin(a)*r);g.rotate(a);gtx(ngl(k+f.a0+fr*.0),0,0,sz,C[(k+fr)%3]);g.restore()}}
+  else if(f.k==='smash'){ // 先頭にカーソル、その後ろに記号の列が流れる（3本、真ん中が太い）
+    const a=f.ang||0,L=320*eOut(Math.min(1,p*1.6)),fr=Math.floor(f.t*24),nx=-Math.sin(a),ny=Math.cos(a),fade=p>.6?1-(p-.6)/.4:1;
+    g.translate(f.x,f.y);g.globalAlpha=fade;
+    for(const [off,sz,col] of [[-30,16,C[2]],[0,30,C[0]],[30,16,C[2]]]){const step=sz*.9,cnt=Math.floor(L/step);
+      for(let k=0;k<cnt;k++){const d=L-k*step-sz,ch=NGL[(k+fr+off*7+NGL.length*9)%NGL.length];gtx(ch,Math.cos(a)*d+nx*off,Math.sin(a)*d+ny*off,sz,k<2&&off===0?C[1]:col)}}
+    g.fillStyle='#000';g.fillRect(Math.cos(a)*L-14,Math.sin(a)*L-19,30,38);g.fillStyle=C[1];if(Math.floor(f.t*12)%2===0||p<.3)g.fillRect(Math.cos(a)*L-11,Math.sin(a)*L-16,24,32)} // ブロックのカーソル
+  else{ // goal：ゴール口から記号の柱が噴き上がる。点を取った側の陣地に記号の雨
+    const dir=f.y<MID?1:-1,cols=16,fr=Math.floor(f.t*14),q=Math.min(1,p/.35),out=p>.8?1-(p-.8)/.2:1,T=FXT.tr;
+    for(let c=0;c<cols;c++){const x=FW/2+(c-(cols-1)/2)*26,h=(140+hash(c*7)*260)*eOut(q)*out,n=Math.floor(h/18),col=T[Math.floor(c/cols*T.length)%T.length];
+      for(let k=0;k<n;k++)gtx(NGL[(k*5+c*3+fr)%NGL.length],x,f.y+dir*(20+k*18),k===n-1?16:13,k===n-1?'#ffffff':col)}
+    gtx('|/\\[]{}()01;:._-*+#@$'.slice(0,Math.ceil(21*q)),FW/2,f.y+dir*8,12,C[0]);
+    if(!lite()&&p>.3){const sc=f.y<MID?0:1;for(let k=0;k<40;k++){const x=snap(hash(k)*FW,6),y=(sc?FY0:MID)+((hash(k+9)*FL/2+(p-.3)*420*(1+hash(k+3)))%(FL/2));gtx(ngl(k+fr),x,y,10,C[k%3])}}}
+  g.restore();return true}
+function drawNullDie(f){ // ボス撃破：緑の輪 → 赤い ERR!! と XXX → 緑の記号の雨で消える
+  const p=clamp(f.t/f.life,0,.999),fr=Math.floor(f.t*18);g.save();g.textAlign='center';g.textBaseline='middle';
+  if(p<.3){const sh=(hash(fr)-.5)*10*p/.3;for(let k=0;k<24;k++){const a=k/24*6.2832,R=64+Math.sin(f.t*40+k)*3;gtx(k%2?'0':'1',f.x+sh+Math.cos(a)*R,f.y+Math.sin(a)*R,18,'#3dff7a')}
+    for(let k=0;k<6;k++)gtx(ngl(k+fr),f.x+sh+(hash(k)-.5)*50,f.y+(hash(k+3)-.5)*50,14,'#c8ffd8')}
+  else if(p<.58){const q=(p-.3)/.28;for(let k=0;k<26;k++){const a=hash(k)*6.2832,r=30+q*190*hash(k+5);gtx(ngl(k+fr),f.x+Math.cos(a)*r,f.y+Math.sin(a)*r,22,k%3?'#ff3355':'#ff8a3d')}
+    frame(0,()=>{const l=local(0,f.x,f.y);ptext('ERR!!',l.u,l.v-10,40,blink(10)?'#ff3355':'#ffffff');ptext('XXX',l.u,l.v+42,30,'#ff3355')})}
+  else{const q=(p-.58)/.42;for(let c=0;c<16;c++){const x=f.x+(c-7.5)*28,top=f.y-200+q*440-hash(c)*80,n=10;
+      for(let k=0;k<n;k++){const y=top-k*26;if(Math.abs(y-f.y)>230)continue;g.globalAlpha=1-k/n;gtx(NGL[(k+c*7+fr)%NGL.length],x,y,20,k===0?'#ffffff':'#3dff7a')}}g.globalAlpha=1}
+  g.restore()}
 /* 8種 → 各スタイルの描画（既存の形を再利用）への対応 */
 function fxViews(f){const v=o=>Object.assign(Object.create(f),o);
   switch(f.k){
@@ -1548,6 +1587,8 @@ function drawEarly(f){ // パリィの早すぎ：灰色の輪が割れて散る
 }
 function drawFx(f){
   if(f.k==='stop'){drawStop(f);return}
+  if(f.k==='nulldie'){drawNullDie(f);return}
+  if(nullS()&&(f.k==='impact'||f.k==='smash'||f.k==='goal')&&drawNull(f))return;
   if(claudeS()&&(f.k==='impact'||f.k==='smash'||f.k==='goal')&&drawClaude(f))return;
   if(f.k==='impact'&&!kawaii()&&!web90()&&drawImpactA(f))return;
   if(f.k==='smash'&&drawSmashS(f))return;
@@ -1680,7 +1721,8 @@ function optTap(l,id){
   if(l.v>OY0+8&&l.v<OY0+52&&l.u>180&&l.u<420){const t=performance.now();if(t-optTitleT<600){optTitleT=0;enterDev()}else optTitleT=t;return} // OPTION の文字を2回連続タップ → 開発者画面
   if(l.v>=SP_Y-2&&l.v<=SP_Y+58&&l.u>56&&l.u<544){setSpeed(spdAt(l.u));spdPtr=id;beep(400+SPD*400,.04);return}
   OPT_ROWS.forEach((key,k)=>{const y=rowY(k);if(l.v<y||l.v>y+58)return;const n=THEMES[key].length;
-    if(l.u>56&&l.u<136){TH[key]=(TH[key]+n-1)%n;applyTheme();beep(520,.04)}else if(l.u>464&&l.u<544){TH[key]=(TH[key]+1)%n;applyTheme();beep(780,.04)}});
+    const step=d=>{let v=TH[key];for(let k=0;k<n;k++){v=(v+n+d)%n;if(!THEMES[key][v].lock||bossBest().clear)break}TH[key]=v;applyTheme()}; // ボスを倒すまで NULL は選べない
+    if(l.u>56&&l.u<136){step(-1);beep(520,.04)}else if(l.u>464&&l.u<544){step(1);beep(780,.04)}});
   if(l.v>OK_Y&&l.v<OK_Y+52&&l.u>200&&l.u<400){state='title';beep(880,.05)}
 }
 function circle(x,y,r,c){g.fillStyle=c;g.beginPath();g.arc(x,y,r,0,7);g.fill()}
@@ -1849,8 +1891,10 @@ function drawBoss(){const B=BOSS,b=P[1];
   });
 }
 const BO_CONT={x:100,y:MID+110,w:400,h:84},BO_TTL={x:100,y:MID+214,w:400,h:64};
-function drawBossOver(){const B=BOSS;g.fillStyle='rgba(0,0,0,.75)';g.fillRect(-40,FY0,FW+80,FL);
-  frame(0,()=>{
+function drawBossOver(){const B=BOSS,W0=2.3; // 勝ったときは撃破の演出（記号の雨）を見せてから画面を出す
+  if(B.result==='win'&&overT<W0)return;const overT0=overT,overT2=B.result==='win'?overT-W0:overT;
+  g.fillStyle='rgba(0,0,0,'+(.75*Math.min(1,overT2*3))+')';g.fillRect(-40,FY0,FW+80,FL);
+  frame(0,()=>{const overT=overT2;
     if(B.result==='win'){ptext('NULL DEFEATED!',FW/2,MID-250,28,YEL);
       ['PUCK SPEED','HOLD','GOAL','TILT','NULL'].forEach((t,k)=>{if(overT<.4+k*.3)return;ptext(t,FW/2-40,MID-190+k*34,12,'#aaa',PIX,'right');ptext('RESET',FW/2+60,MID-190+k*34,12,'#55ff55')});
       if(overT>2){ptext('RULE RESTORED',FW/2,MID+6,22,blink(3)?YEL:'#fff');
@@ -1866,7 +1910,7 @@ function drawBossOver(){const B=BOSS;g.fillStyle='rgba(0,0,0,.75)';g.fillRect(-4
 }
 function bossOverTap(l){const B=BOSS;if(overT<1)return;
   const toTitle=()=>{state='title';placed.forEach(drop);placed=[];bossOff();beep(660,.06)};
-  if(B.result==='win'){if(overT>2.6)toTitle();return}
+  if(B.result==='win'){if(overT>2.3+2.6)toTitle();return}
   if(inR(l,BO_CONT)){placed.forEach(drop);bossContinue();return}
   if(inR(l,BO_TTL))toTitle()}
 function drawAll(){drawUI();if(DIAG)drawDiag()}
@@ -1887,7 +1931,7 @@ if(window.visualViewport)visualViewport.addEventListener('resize',resizeSoon);
 if(document.fonts&&document.fonts.load){document.fonts.load('20px "Press Start 2P"');document.fonts.load('20px DotGothic16')}
 requestAnimationFrame(loop);
 // 開発・テスト用（?debug のときだけ）：状態の参照と論理座標→画面座標
-if(/[?&]debug/.test(location.search))window.__AH={get SPD(){return SPD},get cpu(){return cpu},POST,BOSS,get GWB(){return GWB},SUP,get PAR(){return PAR},get hitstop(){return hitstop},get shake(){return shake},hit:(...a)=>hit(...a),NET,LOB,get P(){return P},puck,get arm(){return arm},get drags(){return [...drags.values()]},get placed(){return placed},get state(){return state},get mode(){return mode},get live(){return live},get ts(){return ts},get fx(){return fx},get viewFlip(){return viewFlip},
+if(/[?&]debug/.test(location.search))window.__AH={get SPD(){return SPD},get cpu(){return cpu},get TH(){return TH},POST,BOSS,get GWB(){return GWB},SUP,get PAR(){return PAR},get hitstop(){return hitstop},get shake(){return shake},hit:(...a)=>hit(...a),NET,LOB,get P(){return P},puck,get arm(){return arm},get drags(){return [...drags.values()]},get placed(){return placed},get state(){return state},get mode(){return mode},get live(){return live},get ts(){return ts},get fx(){return fx},get viewFlip(){return viewFlip},
   scr(x,y){if(viewFlip){x=FW-x;y=TL-y}return rot?{x:VX+OX+y*S,y:VY+OY+(FW-x)*S}:{x:VX+OX+x*S,y:VY+OY+y*S}},give(i,k){P[i].items.push(k)},spawnFx(k,x,y,sc,col,ex){const f=addFx(k,x,y,sc,'',col);if(f&&ex)Object.assign(f,ex);return !!f},setTH(o){Object.assign(TH,o);applyTheme()},rx,pdown,ctl};
 }
 </script>
