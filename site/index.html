@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.52">
+<meta name="version" content="1.53">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.52'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.53'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=1680,WIN=7; // MAXV＝パックの最高速（v1.37 で旧ゲームスピード0.8倍を基準＝100%に。パックの速さの値はすべて旧値の0.8倍）
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -257,7 +257,7 @@ function render3D(){
     if(it.mesh)it.mesh.position.y=!minimal()&&it.age<.22?Math.pow(1-it.age/.22,2)*420:0;
     if(!it.mesh){it.mesh=meshes.make[it.type]();it.mesh.position.set(wx(it.x),0,wz(it.y));it.mesh.rotation.y=it.type==='boost'?Math.atan2(-it.dx,-it.dy):(it.o===1?Math.PI:0);scene.add(it.mesh)}
     const left=it.life-it.age,pop=it.age<.22?1:1,s=pop*(1+it.hit*.6);
-    const sy=it.age<.22?1:it.type==='jump'&&it.hit>0?(it.hit>.22?.35:1+it.hit*4):1+it.hit;it.mesh.scale.set(s,sy,s);it.mesh.visible=left>2||Math.floor(it.age*8)%2===0;
+    const sy=it.age<.22?1:it.type==='jump'&&it.hit>0?(it.hit>.22?.35:1+it.hit*4):1+it.hit;it.mesh.scale.set(s,sy,s);const stopped=state!=='play'||!live||PAR.who>=0||SUP.aim>=0||hitstop>0;it.mesh.visible=left>2||stopped||Math.floor(clock*8)%2===0; // 消えかけの点滅：止まっている間は必ず表示、点滅は実時間（スロー中も同じ速さ）
   }
   boostTex.offset.y=-Math.floor(clock*20%10)/10;
   if(meshes.slimeTex)meshes.slimeTex.offset.x=(Math.floor(clock*5)%4)/4; // スライムのコマ送り
@@ -595,7 +595,7 @@ function bossReady(k){const B=BOSS;
   return true}
 const wallOk=()=>!placed.some(q=>q.mega&&!q.dead)&&BOSS.round-BOSS.wallRound>=BOSSC.wallEvery; // ラウンド＝1点ごと
 function bossNext(){const B=BOSS,R=BOSS_ROT[B.phase];B.rot[B.phase]=(B.rot[B.phase]+1)%R.length;B.next=R[B.rot[B.phase]]}
-function bossPlaceBoost(x,y,dx,dy){placed.push({id:++pid,type:'boost',x,y,o:1,age:0,life:3.4,hit:0,mesh:null,dx,dy,boss:true})}
+function bossPlaceBoost(x,y,dx,dy){placed.push({id:++pid,type:'boost',x,y,o:1,age:0,life:1.6,hit:0,mesh:null,dx,dy,boss:true})} // ボスの加速床は短命（通ったらすぐ壊れる）
 function bossExec(k){const B=BOSS,b=P[1];
   if(k==='twin'){ // 加速床を2枚並べ、その上を通して超高速球
     if(!(puck.y<MID-30))return;const tx=FW/2+(P[0].x>FW/2?-1:1)*rnd(30,80),ty=FY1+40;let dx=tx-puck.x,dy=ty-puck.y;const d=Math.hypot(dx,dy);dx/=d;dy/=d;
@@ -1241,7 +1241,7 @@ function sub(h,ms){
         // 床の向きにスナップして一直線に射出、横ずれはレールのように中心線へ寄せる
         const across=dx*-it.dy+dy*it.dx,sp=Math.min(Math.max(Math.hypot(puck.vx,puck.vy)*1.25,1280),2080);
         puck.x-=-it.dy*across*.35;puck.y-=it.dx*across*.35;
-        puck.vx=it.dx*sp;puck.vy=it.dy*sp;puck.boostT=.875;puck.paT=0;if(BOSS.on&&!it.boss)puck.lastTouch=-1; // ボス戦：加速床を通った球はだれの球でもない（パリィできる）
+        puck.vx=it.dx*sp;puck.vy=it.dy*sp;puck.boostT=.875;puck.paT=0;if(it.boss)setTimeout(()=>breakItem(it),60); // ボスの加速床：通ったらすぐ壊れるif(BOSS.on&&!it.boss)puck.lastTouch=-1; // ボス戦：加速床を通った球はだれの球でもない（パリィできる）
         if(it.hit<=0){slide(600,1800,.14,'sawtooth',.05);addFx('speed',puck.x,puck.y,1);juice(8,.04,1,.1,'#00ffff')}it.hit=.15;
       }else if(it.type==='bumper'){bumperHit(it,r)
       }else if(it.type==='mud'&&Math.hypot(dx,dy)<r){if(puck.sup>=0){mud=true;breakItem(it);continue} // スーパーシュート：減速してから壊れる
