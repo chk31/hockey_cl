@@ -23,6 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # ローグライク版 site/rogue/index.html を本体から作る（本体のコピー＋rogue/rogue.js の埋め込み）
+      - run: python3 tools/build_rogue.py
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
