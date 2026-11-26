@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.53">
+<meta name="version" content="1.54">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.53'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.54'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=1680,WIN=7; // MAXV＝パックの最高速（v1.37 で旧ゲームスピード0.8倍を基準＝100%に。パックの速さの値はすべて旧値の0.8倍）
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -329,7 +329,81 @@ const _seq=(notes,step=.07,type='square',v=.06)=>notes.forEach((f,k)=>f&&_beep(f
 function _slide(f0,f1,d,type='square',v=.06){if(!ac)return;try{const o=ac.createOscillator(),gn=ac.createGain(),t=ac.currentTime;o.type=type;o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(f1,t+d);gn.gain.setValueAtTime(v,t);gn.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(gn).connect(ac.destination);o.start(t);o.stop(t+d+.02)}catch(e){}}
 
 /* オンライン（ホスト）では音をゲストへも転送する。rctx＝ゲストの操作を処理中（ホスト側では鳴らさない） */
-const SND={beep:_beep,noise:_noise,seq:_seq,slide:_slide};
+
+/* ================= 効果音（電子音のシンセ）=================
+   方針（桜井スキル #032／#089 ほか）：勝敗への影響が大きい音ほど目立たせる（ゴール＞パリィ＞スマッシュ＞打撃＞スーパー＞ポスト＞壁＞アイテム）。
+   打撃はアタックを強く・残響はほどほど。強打はヒットストップの間に主要部を鳴らし終える。同じ音の連打は音程を少しばらつかせる。
+   部品：tone（発振器2つを少しずらして厚み・音程の変化・ビブラート・ローパス）、nz（ノイズを帯域で絞ったアタック／風）。
+   全体はミキサー（コンプレッサー）でまとめて割れないようにし、短い残響（スラップ）を少しだけ送る。左右はパックの横位置で振る。 */
+let MB=null,NZB=null;
+function bus(){if(MB||!ac)return MB;try{const comp=ac.createDynamicsCompressor();comp.threshold.value=-16;comp.knee.value=10;comp.ratio.value=5;comp.attack.value=.002;comp.release.value=.14;
+  const mg=ac.createGain();mg.gain.value=1;comp.connect(mg).connect(ac.destination);
+  const dl=ac.createDelay(.3);dl.delayTime.value=.062;const fb=ac.createGain();fb.gain.value=.3;const lp=ac.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2400;const wet=ac.createGain();wet.gain.value=.5;
+  dl.connect(lp);lp.connect(fb).connect(dl);lp.connect(wet).connect(comp);
+  const n=ac.sampleRate,b=ac.createBuffer(1,n,n),d=b.getChannelData(0);for(let k=0;k<n;k++)d[k]=Math.random()*2-1;NZB=b;
+  MB={in:comp,send:dl}}catch(e){MB=null}return MB}
+const panX=x=>x==null?0:clamp((viewFlip?FW-x:x)/FW*2-1,-1,1)*.65; // パックの横位置 → 左右
+function outTo(node,o,t,end){const b=MB;let n=node;if(o.pan&&ac.createStereoPanner){const pn=ac.createStereoPanner();pn.pan.value=o.pan;n.connect(pn);n=pn}
+  n.connect(b.in);if(o.send){const sg=ac.createGain();sg.gain.value=o.send;n.connect(sg).connect(b.send)}}
+/* tone：f→f1（pt 秒で）、type、v 音量、a 立ち上がり、dur 長さ（指数で減衰）、det 2つ目の発振器のずれ（cent）、lp→lp1 ローパス、vib ビブラート[速さ,深さcent]、at 開始の遅れ */
+function tone(o){const b=bus();if(!b)return;try{const t=ac.currentTime+(o.at||0),d=o.dur||.1,a=o.a||.002,g=ac.createGain();
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(o.v,t+a);if(o.hold)g.gain.setValueAtTime(o.v,t+a+o.hold);g.gain.exponentialRampToValueAtTime(.0001,t+d);
+  let head=g;if(o.lp){const f=ac.createBiquadFilter();f.type='lowpass';f.Q.value=o.q||1;f.frequency.setValueAtTime(o.lp,t);if(o.lp1)f.frequency.exponentialRampToValueAtTime(o.lp1,t+(o.lt||d));f.connect(g);head=f}
+  const os=(o.det?[-o.det/2,o.det/2]:[0]).map(dc=>{const x=ac.createOscillator();x.type=o.type||'square';x.frequency.setValueAtTime(o.f,t);if(o.f1)x.frequency.exponentialRampToValueAtTime(o.f1,t+(o.pt||d));x.detune.value=dc;x.connect(head);return x});
+  if(o.vib){const l=ac.createOscillator(),lg=ac.createGain();l.frequency.value=o.vib[0];lg.gain.value=o.vib[1];l.connect(lg);os.forEach(x=>lg.connect(x.detune));l.start(t);l.stop(t+d+.05)}
+  outTo(g,o,t);os.forEach(x=>{x.start(t);x.stop(t+d+.05)})}catch(e){}}
+/* nz：ノイズを帯域（bp→bp1）で絞る。hp ならハイパス。v 音量、dur 長さ、a 立ち上がり */
+function nz(o){const b=bus();if(!b||!NZB)return;try{const t=ac.currentTime+(o.at||0),d=o.dur||.05,src=ac.createBufferSource();src.buffer=NZB;
+  const f=ac.createBiquadFilter();f.type=o.hp?'highpass':'bandpass';f.Q.value=o.q||1.2;f.frequency.setValueAtTime(o.bp||2000,t);if(o.bp1)f.frequency.exponentialRampToValueAtTime(o.bp1,t+d);
+  const g=ac.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(o.v,t+(o.a||.001));g.gain.exponentialRampToValueAtTime(.0001,t+d);
+  src.connect(f).connect(g);outTo(g,o,t);src.start(t,Math.random()*.5);src.stop(t+d+.05)}catch(e){}}
+const jit=(k=.03)=>1+(Math.random()*2-1)*k; // 連打のばらつき
+const SFXP={
+  hit(sp,x){const k=clamp(sp/1480,0,1),pan=panX(x),f=(260+k*300)*jit(); // 打撃：カッ（ノイズ）＋音程が落ちる胴鳴り＋強いほど低いドン
+    nz({bp:4200,bp1:2400,q:1.4,v:.10+.22*k,dur:.018+.012*k,pan});
+    tone({type:'square',f:f*1.9,f1:f,pt:.03,v:.07+.11*k,dur:.05+.05*k,lp:5200,lp1:1400,det:14,pan,send:.12});
+    if(k>.45)tone({type:'sine',f:140,f1:55,pt:.07,v:.16*k,dur:.09,pan})},
+  smash(sp,x){const pan=panX(x); // スマッシュ：割れるアタック＋明るい和音の刺し＋腹に来る低音。主要部は約90ms（ヒットストップ中）で鳴らし終える
+    nz({bp:6500,bp1:900,q:.9,v:.42,dur:.09,pan,send:.25});
+    for(const [m,v] of [[1,.12],[1.5,.08],[2,.07]])tone({type:'square',f:523*m*jit(.01),f1:392*m,pt:.08,v,dur:.13,lp:7000,lp1:1800,det:18,pan,send:.3});
+    tone({type:'sine',f:110,f1:38,pt:.16,v:.34,dur:.2,pan});tone({type:'triangle',f:1568,f1:2093,pt:.04,v:.05,dur:.07,at:.01,pan})},
+  wall(sp,x){const k=clamp(sp/1480,0,1);if(k<.04)return; // 壁：短く乾いたチッ。軽い球ほど小さく高い
+    tone({type:'triangle',f:(980-k*300)*jit(.05),f1:520,pt:.02,v:.07+.17*k,dur:.03+.03*k,pan:panX(x)});nz({bp:3000,v:.06+.14*k,dur:.012,pan:panX(x)})},
+  post(v,x){const k=clamp(v/1200,.25,1),pan=panX(x); // ゴールポスト：カーン（金属の非整数倍音）
+    for(const [m,a,dd] of [[1,1,.32],[2.76,.55,.2],[5.4,.3,.12]])tone({type:'triangle',f:1180*m,v:.24*a*k,dur:dd,pan,send:.35});nz({bp:5000,v:.25*k,dur:.012,pan})},
+  goal(sc){ // ゴール：ドンと鳴ってから上がるファンファーレ、最後の和音はビブラートで伸ばす（いちばん大きい）
+    nz({bp:900,bp1:120,q:.7,v:.45,dur:.45,send:.3});tone({type:'sine',f:90,f1:30,pt:.4,v:.4,dur:.45});
+    [784,988,1175,1568].forEach((f,k)=>tone({type:'square',f,v:.09,dur:.11,det:12,lp:6000,at:.08+k*.07,send:.25}));
+    for(const f of [1568,1976,2349])tone({type:'square',f,v:.06,a:.01,hold:.25,dur:.7,det:10,lp:5000,lp1:2200,vib:[7,18],at:.38,send:.35})},
+  parry(){ // パリィ成立：キュイーン（ローパスが開きながら上がる）→ 頂点でキンッ＋きらめき
+    tone({type:'sawtooth',f:240,f1:2600,pt:.28,v:.11,dur:.32,lp:900,lp1:9000,lt:.28,det:20,send:.3});
+    tone({type:'square',f:480,f1:5200,pt:.3,v:.045,dur:.34,det:8});
+    for(const [f,v] of [[2637,.08],[3520,.05],[5274,.03]])tone({type:'triangle',f,v,dur:.5,at:.28,vib:[9,12],send:.4});nz({hp:1,bp:6000,v:.05,dur:.3,at:.25})},
+  pfire(x){const pan=panX(x); // パリィの発射：ヒュン（風）＋上がるピッ
+    nz({bp:1800,bp1:7000,q:1.8,v:.22,dur:.16,pan,send:.15});tone({type:'square',f:660,f1:2640,pt:.1,v:.08,dur:.13,det:16,pan});tone({type:'sine',f:160,f1:70,v:.15,dur:.1,pan})},
+  early(x){const pan=panX(x); // 早すぎ：ブッブー（にごった2音、下がる）
+    tone({type:'square',f:330,f1:300,v:.03,dur:.07,det:40,lp:1800,pan});tone({type:'square',f:196,f1:150,v:.035,dur:.17,det:45,lp:1200,at:.08,pan})},
+  pwr(){[523,659,784,1047,1319].forEach((f,k)=>tone({type:'square',f,v:.035,dur:.08,det:10,at:k*.045,send:.2}));tone({type:'triangle',f:2093,v:.05,dur:.4,at:.22,vib:[8,20],send:.3})}, // 強化
+  charge(){tone({type:'sawtooth',f:180,f1:900,pt:.3,v:.07,dur:.34,lp:600,lp1:4000,det:25,vib:[14,30]})}, // 構え：ためのうなり
+  sfire(x){const pan=panX(x); // スーパーシュート：ビーム（下がるのこぎり波）＋割れ＋低音
+    tone({type:'sawtooth',f:1800,f1:140,pt:.3,v:.12,dur:.34,lp:8000,lp1:900,det:30,pan,send:.3});nz({bp:3000,bp1:300,v:.3,dur:.22,pan,send:.2});tone({type:'sine',f:120,f1:40,v:.3,dur:.25,pan})},
+  stun(x){const pan=panX(x); // スタン：ピヨピヨと下がる
+    [880,740,620].forEach((f,k)=>tone({type:'triangle',f,f1:f*.8,v:.07,dur:.09,vib:[18,60],at:k*.1,pan,send:.2}));nz({bp:600,v:.12,dur:.08,pan})},
+  get(){tone({type:'square',f:988,v:.03,dur:.07,det:8,send:.25});tone({type:'square',f:1319,v:.03,dur:.16,det:8,at:.07,send:.3});tone({type:'triangle',f:2637,v:.025,dur:.2,at:.07})}, // 取得：ピロン
+  spawn(x){tone({type:'triangle',f:1319,v:.035,dur:.06,pan:panX(x)});tone({type:'triangle',f:1760,v:.03,dur:.09,at:.06,pan:panX(x)})}, // 出現（控えめ）
+  place(x){const pan=panX(x);tone({type:'square',f:300,f1:90,pt:.08,v:.08,dur:.1,lp:2200,pan});nz({bp:700,v:.08,dur:.05,pan})}, // 設置：ズン
+  bump(x){const pan=panX(x);tone({type:'square',f:520,f1:1040,pt:.03,v:.07,dur:.16,vib:[22,80],lp:4000,pan,send:.2});tone({type:'sine',f:180,f1:90,v:.12,dur:.08,pan})}, // バンパー：ボヨン
+  boost(x){const pan=panX(x);nz({bp:900,bp1:5000,q:2,v:.3,dur:.14,pan});tone({type:'sawtooth',f:300,f1:1600,pt:.12,v:.09,dur:.14,lp:3000,pan})}, // 加速床：シュイン
+  jump(x){tone({type:'square',f:260,f1:1300,pt:.22,v:.1,dur:.26,lp:3500,pan:panX(x),send:.2})}, // ジャンプ台：ビヨーン
+  land(x){const pan=panX(x);tone({type:'sine',f:130,f1:45,v:.3,dur:.2,pan});nz({bp:500,bp1:120,v:.22,dur:.15,pan})}, // 着地：ドスン
+  mud(x){const pan=panX(x);nz({bp:500,bp1:180,q:3,v:.4,dur:.22,pan});tone({type:'sawtooth',f:180,f1:60,v:.12,dur:.2,lp:500,vib:[30,120],pan})}, // スライム：ズブッ
+  boom(x){const pan=panX(x);nz({bp:1200,bp1:80,q:.6,v:.5,dur:.6,pan,send:.3});tone({type:'sine',f:100,f1:28,pt:.5,v:.4,dur:.6,pan});tone({type:'sawtooth',f:400,f1:40,pt:.5,v:.06,dur:.55,lp:1500,lp1:200,pan})}, // 4秒ルールの爆発
+  tick(last){tone({type:'square',f:last?1760:1175,v:last?.12:.08,dur:.05,det:6})}, // 4秒ルールの秒読み
+  live(){tone({type:'square',f:1319,v:.04,dur:.05});tone({type:'square',f:1760,v:.04,dur:.07,at:.05})}, // サーブ後に動き出した
+};
+function _sfx(n,...a){if(!ac)return;const f=SFXP[n];if(f)f(...a)}
+function sfx(...a){relay(['s','sfx',a]);if(!rctx)_sfx(...a)}
+const SND={beep:_beep,noise:_noise,seq:_seq,slide:_slide,sfx:_sfx};
 function beep(...a){relay(['s','beep',a]);if(!rctx)_beep(...a)}
 function noise(...a){relay(['s','noise',a]);if(!rctx)_noise(...a)}
 function seq(...a){relay(['s','seq',a]);if(!rctx)_seq(...a)}
@@ -381,9 +455,9 @@ function cornerPush(o,r){for(const [cx,cy,sx,sy] of CORNERS){if(sy>0&&BOSS.on&&(
 const SMASH=1480; // スマッシュ判定の相対速度。最高速 1680 に近い強打だけ
 function hit(x,y,sp,txt,who=-1,wn=null){
   const t=performance.now();if(t-lastHit<60)return;lastHit=t;
-  beep(220+Math.min(sp,1600)*.375,.045,'square',.07);
+  if(wn)sfx('wall',sp,x);else if(who>=0&&!(sp>SMASH))sfx('hit',sp,x); // 打撃・壁の音（スマッシュは下で専用の音）
   if(wn){if(sp>120){const f=addFx('impact',x,y,clamp(sp/14.4,34,100),'','');if(f){f.nx=wn[0];f.ny=wn[1]}}if(sp>800)juice(6,.03,.4,.06);return}
-  if(sp>SMASH&&who>=0){juice(18,.09,1,.35,COL[who]);noise(.25,.12);const f=addFx('smash',x,y,1,'',COL[who]);if(f)f.ang=Math.atan2(puck.vy,puck.vx);return}
+  if(sp>SMASH&&who>=0){juice(18,.09,1,.35,COL[who]);sfx('smash',sp,x);const f=addFx('smash',x,y,1,'',COL[who]);if(f)f.ang=Math.atan2(puck.vy,puck.vx);return}
   if(sp>120)addFx('impact',x,y,clamp(sp/14.4,26,110),'','');
   if(sp>800)addFx('wave',x,y,clamp(sp/9.6,40,160),'',who>=0?COL[who]:'#fff'); // 強い打撃だけ輪を重ねる
   if(sp>800)juice(9,.05,.6,.12,who>=0?COL[who]:'#ffffff');
@@ -394,9 +468,9 @@ let live=false; // サーブ後、パックが一度動くまでアイテム関�
 const HOLD=4;
 function explode(side){
   const x=puck.x,y=puck.y;puck.boom=true;puck.vx=puck.vy=0;
-  for(let k=0;k<5;k++)setTimeout(()=>{addFx('impact',x+rnd(-60,60),y+rnd(-60,60),rnd(70,120),'','');noise(.2,.12)},k*90);
+  for(let k=0;k<5;k++)setTimeout(()=>{addFx('impact',x+rnd(-60,60),y+rnd(-60,60),rnd(70,120),'','')},k*90);
   addFx('wave',x,y,220,'','#ff0055');
-  juice(34,.2,1.6,1,'#ff0055');noise(.8,.25);slide(400,40,.6,'sawtooth',.1);
+  juice(34,.2,1.6,1,'#ff0055');sfx('boom',x);
   goal(1-side);
 }
 /* ================= スーパーシュート =================
@@ -407,14 +481,14 @@ const AURA='#33ccff',SUP_SP=2080,SUP_AIM=2.5,STUN=1.5,SUP_RCV=336; // SUP_RCV＝
 let SUP={aim:-1,t:0,dx:0,dy:-1};
 function superOn(i,slot){const p=P[i];if(p.items[slot]!=='super')return;
   if(p.pw){flashSlot(p,'#666',.3,slot);beep(150,.1,'square',.06);return} // もう強化中
-  p.items.splice(slot,1);p.pw=true;addFx('wave',p.x,p.y,110,'',AURA);seq([523,784,1047,1568],.05,'square',.06)}
+  p.items.splice(slot,1);p.pw=true;addFx('wave',p.x,p.y,110,'',AURA);sfx('pwr')}
 function superTrigger(i){SUP.aim=i;SUP.t=SUP_AIM;SUP.dx=0;SUP.dy=fwd(i);puck.vx=puck.vy=0;puck.sup=-1;
-  addFx('wave',puck.x,puck.y,130,'',AURA);juice(8,0,.6,.15,AURA);slide(300,1200,.25,'square',.07)}
+  addFx('wave',puck.x,puck.y,130,'',AURA);juice(8,0,.6,.15,AURA);sfx('charge')}
 function superAimDir(i){const p=P[i];if(p.ptr==null||p.fx==null)return null;const dx=puck.x-p.fx,dy=puck.y-p.fy,d=Math.hypot(dx,dy);return d<20?null:{dx:dx/d,dy:dy/d}} // 指からパックへの向き＝引っ張りの逆
 function superFire(){const i=SUP.aim;if(i<0)return;puck.lastTouch=i;const a=superAimDir(i)||{dx:SUP.dx,dy:SUP.dy};SUP.aim=-1;P[i].pw=false;
   puck.vx=a.dx*SUP_SP;puck.vy=a.dy*SUP_SP;puck.boostT=1.125;puck.sup=i;puck.supT=2.5;puck.land=0;
-  addFx('speed',puck.x,puck.y,1);addFx('impact',puck.x,puck.y,90,'',AURA);juice(14,.06,.9,.25,AURA);slide(500,2000,.18,'sawtooth',.07);noise(.2,.1)}
-function stunP(i){const p=P[i];p.stun=STUN;addFx('impact',p.x,p.y,80,'',AURA);addFx('wave',p.x,p.y,100,'',AURA);juice(10,.05,.6,.2,AURA);noise(.3,.12);seq([400,300,200],.06,'square',.06)}
+  addFx('speed',puck.x,puck.y,1);addFx('impact',puck.x,puck.y,90,'',AURA);juice(14,.06,.9,.25,AURA);sfx('sfire',puck.x)}
+function stunP(i){const p=P[i];p.stun=STUN;addFx('impact',p.x,p.y,80,'',AURA);addFx('wave',p.x,p.y,100,'',AURA);juice(10,.05,.6,.2,AURA);sfx('stun',p.x)}
 function superClear(){for(const p of P){p.pw=false;p.stun=0}SUP.aim=-1;puck.sup=-1;PAR.who=-1;puck.par=-1}
 /* ================= パリィ =================
    パックがマレットに当たる直前 0.1 秒以内に指を離していたら成立。0.5 秒時間が止まり、その間に素早くスワイプした方向へ弾く。
@@ -434,7 +508,7 @@ const EARLY_W=.3;
 function parryEarly(p){if(state!=='play'||p.pw||p.stun>0||p.ptr!=null||!p.relT||(mode==='cpu'&&p.i===1))return false;
   if(puck.lastTouch===p.i||Math.hypot(puck.vx,puck.vy)<PARC.s)return false;
   const age=(hnow()-p.relT)/1000,w=PARC.w+(p.relRemote?.03:0);return age>w&&age<=w+EARLY_W}
-function earlyCue(p){p.relT=0;addFx('early',p.x,p.y,1,'','#b8b8c8');beep(392,.06,'square',.07);beep(196,.15,'square',.07,.07)}
+function earlyCue(p){p.relT=0;addFx('early',p.x,p.y,1,'','#b8b8c8');sfx('early',p.x)}
 function parryStart(i,nx,ny){
   const sp0=Math.hypot(puck.vx,puck.vy),vn=puck.vx*nx+puck.vy*ny;let rx=puck.vx-2*vn*nx,ry=puck.vy-2*vn*ny,rl=Math.hypot(rx,ry); // 普通に跳ね返った向き（スワイプしなかったとき用）
   if(rl<1){rx=nx;ry=ny;rl=1}
@@ -442,11 +516,11 @@ function parryStart(i,nx,ny){
   PAR={who:i,t:PARC.t,T:PARC.t,dx:rx/rl,dy:ry/rl,sp:clamp(sp0*1.2,1728,2080)};
   puck.vx=puck.vy=0;puck.sup=-1;puck.par=-1;P[i].relT=0;
   addFx('wave',puck.x,puck.y,140,'',COL[i]);addFx('impact',puck.x,puck.y,70,'',COL[i]);juice(10,0,.8,.35,COL[i]);
-  slide(280,2600,.3,'sawtooth',.07);slide(560,3400,.34,'square',.04);beep(2637,.14,'triangle',.06,.3)} // キュイーン：上がっていくうなり＋高い余韻
+  sfx('parry')} // キュイーン：上がっていくうなり＋高い余韻
 function parryFire(dx,dy){const i=PAR.who;if(i<0)return;if(BOSS.on&&i===0)BOSS.delay=BOSSC.parDelay; // ボス戦：時間停止が終わってから0.5秒、ボスは動けない
   puck.lastTouch=i;const l=Math.hypot(dx,dy)||1;PAR.who=-1;
   puck.vx=dx/l*PAR.sp*PAR_A0;puck.vy=dy/l*PAR.sp*PAR_A0;puck.paV=PAR.sp;puck.paT=puck.paT0=PAR_AT;puck.boostT=1.125;puck.par=i;puck.parT=2;puck.land=0;
-  {const f=addFx('speed',puck.x,puck.y,1);if(f){f.nx=dx/l;f.ny=dy/l}}addFx('impact',puck.x,puck.y,90,'',COL[i]);juice(14,.05,.9,.2,COL[i]);slide(500,2200,.16,'square',.07);noise(.18,.1)}
+  {const f=addFx('speed',puck.x,puck.y,1);if(f){f.nx=dx/l;f.ny=dy/l}}addFx('impact',puck.x,puck.y,90,'',COL[i]);juice(14,.05,.9,.2,COL[i]);sfx('pfire',puck.x)}
 function serve(side){live=false;puck.boom=false;puck.paT=0;puck.sup=-1;puck.par=-1;puck.lastTouch=-1;PAR.who=-1;puck.hold=0;puck.side=side;puck.x=FW/2;puck.y=side===0?MID+170:MID-170;puck.vx=puck.vy=0;puck.air=0;puck.trail=[]}
 function start(m,l){
   if(m)mode=m;if(l!=null)lvl=l;
@@ -457,21 +531,20 @@ function start(m,l){
 function goal(scorer){
   const parGoal=puck.par===0; // パリィで返した球のゴール（ボス戦は2ダメージ）
   superClear(); // 点が入ったら強化・スタン・構えを解除
-  P[scorer].score++;lastScorer=scorer;goalT=2.2;state='goal';flash=0;juice(30,.15,1.5,1,COL[scorer]);railFlash=2;noise(.6,.2);
+  P[scorer].score++;lastScorer=scorer;goalT=2.2;state='goal';flash=0;juice(30,.15,1.5,1,COL[scorer]);railFlash=2;sfx('goal',scorer);
   const gy=scorer===0?FY0:FY1;addFx('goal',FW/2,gy,1,'',COL[scorer]); // 爆発は点を取られた側のゴール。描き方（STYLE・COLOR）は点を取った人の設定
-  for(let k=0;k<6;k++)setTimeout(()=>{FXWHO=scorer;addFx('impact',FW/2+rnd(-200,200),gy+(gy<MID?1:-1)*rnd(20,300),rnd(60,110),'','');FXWHO=null;noise(.15,.08)},k*120);
+  for(let k=0;k<6;k++)setTimeout(()=>{FXWHO=scorer;addFx('impact',FW/2+rnd(-200,200),gy+(gy<MID?1:-1)*rnd(20,300),rnd(60,110),'','');FXWHO=null},k*120);
   rally=0;lastHitter=-1;
-  seq([784,988,1175,1568,1568,0,1568],.07,'square',.07);
   if(BOSS.on){if(bossGoal(scorer,parGoal)){state='over';overT=0;if(BOSS.result==='win')setTimeout(()=>_seq([523,659,784,1047,0,1047,1319,1568,2093],.1,'square',.07),400);else setTimeout(()=>_seq([392,330,262,196],.14,'square',.07),400)}return}
   if(P[scorer].score>=WIN){state='over';overT=0;setTimeout(()=>seq([1047,0,988,0,1047,1319,1568,0,2093],.1,'square',.07),600)}
 }
-function spawnBox(p){const b=p.box;b.on=true;b.spin=0;b.x=rnd(80,FW-80);const y=rnd(MID+100,FY1-230);b.y=p.i===0?y:TL-y;seq([1319,1568],.05,'square',.04);addFx('spawn',b.x,b.y,1,'',COL[p.i])}
+function spawnBox(p){const b=p.box;b.on=true;b.spin=0;b.x=rnd(80,FW-80);const y=rnd(MID+100,FY1-230);b.y=p.i===0?y:TL-y;sfx('spawn',b.x);addFx('spawn',b.x,b.y,1,'',COL[p.i])}
 function give(p){
   const b=p.box;b.on=false;b.cd=10;addFx('wave',b.x,b.y,90,'',COL[p.i]);
   if(p.items.length>=SLOTS){flashSlot(p,'#ff0055',.7);seq([300,200],.08);return}
   const k=pickItem();p.items.push(k);setTimeout(()=>flashSlot(p,YEL,.5,p.items.indexOf(k)),480);
   const sl=local(p.i,slotX(p.items.length-1),SLOT_Y);const fl=addFx('fly',b.x,b.y,1,k,COL[p.i]);if(fl){fl.tx=sl.u;fl.ty=sl.v}juice(6,0,.4,0);
-  seq([988,1319],.07,'square',.07);
+  sfx('get');
 }
 /* 加速床の向き：相手ゴール中央へ（真正面から最大±30°） */
 function boostDir(o,x,y){const gx=FW/2,gy=o===0?FY0:FY1;let a=Math.atan2(gx-x,Math.abs(gy-y));a=clamp(a,-.52,.52);return {dx:Math.sin(a),dy:fwd(o)*Math.cos(a)}}
@@ -486,7 +559,7 @@ function place(d){
   const gp=ghost(d);placed.push(Object.assign({id:++pid,type:d.type,x:gp.x,y:gp.y,o:d.i,age:0,life:9.6,hit:0,mesh:null},d.type==='boost'?boostDir(d.i,gp.x,gp.y):{}));
   const mine=placed.filter(q=>q.o===d.i);if(mine.length>3){drop(mine[0]);placed.splice(placed.indexOf(mine[0]),1)}
   setTimeout(()=>{addFx('wave',gp.x,gp.y,IT[d.type].r+60,'',IT[d.type].c);juice(8,0,.5,0);noise(.12,.1)},200);
-  slide(400,80,.15,'square',.08);
+  sfx('place',d.x);
 }
 
 /* ================= CPU ================= */
@@ -1011,7 +1084,9 @@ function drawPauseBtn(p){ // ‖ アイコン（文字なし）
 const DEV={saved:null,last:'burst',loop:false,loopT:0,move:true,fast:false,slow:false,aura:false,stun:false,goal:false,a:0};
 const DEV_FX=['impact','imp-wall','imp-tiny','wave','smash','speed','mud-in','mud-out','mud-bub','mud-drop','goal','spawn','fly','stop'];
 const DEV_TG=['ALL','LOOP','MOVE','FAST','SLOW','AURA','STUN','GOAL','PARRY'];
-const DEV_PAGES=['EFFECT','GAME'],devTab=k=>({x:110+k*118,y:MID+14,w:112,h:38}),DEV_RST={x:350,y:MID+14,w:112,h:38};
+const DEV_PAGES=['EFFECT','GAME','SOUND'],devTab=k=>({x:104+k*84,y:MID+14,w:80,h:38}),DEV_RST={x:362,y:MID+14,w:96,h:38};
+const DEV_SND=[['HIT 弱','hit',380],['HIT 強','hit',1300],['SMASH','smash',1600],['WALL','wall',900],['POST','post',900],['GOAL','goal',0],['PARRY','parry'],['P-FIRE','pfire'],['EARLY','early'],['POWER','pwr'],['CHARGE','charge'],['S-FIRE','sfire'],['STUN','stun'],['GET','get'],['SPAWN','spawn'],['PLACE','place'],['BUMPER','bump'],['BOOST','boost'],['JUMP','jump'],['LAND','land'],['SLIME','mud'],['BOOM','boom'],['TICK','tick',false],['LIVE','live']]; // 開発者画面 SOUND：効果音の試聴
+const devSndCell=k=>({x:30+(k%4)*135+4,y:MID+62+Math.floor(k/4)*40,w:127,h:36});
 function devReset(){if((DEV.page|0)===1){Object.assign(PARC,PARC_DEF);saveParry();KEYS.forEach(k=>setIW(k,5))}else{TH.st=0;TH.fx=0;TH.lv=0;applyTheme()}} // 今のページの値を初期値に戻す // 開発者画面のページ：エフェクト／ゲーム設定
 const DEV_ROWS=[[['st','FX STYLE'],['fx','FX COLOR'],['lv','FX LEVEL']],
   [['pw','PARRY WIN'],['pt','PARRY STOP'],['ps','PARRY SPD'],['i:jump','ITEM JUMP'],['i:boost','ITEM BOOST'],['i:bumper','ITEM BUMPER'],['i:mud','ITEM SLIME'],['i:super','ITEM SUPER']]],
@@ -1043,7 +1118,7 @@ function devFire(k){
   if(k==='ALL'){DEV_FX.forEach((q,n)=>at(q,X[n%4],Y[Math.floor(n/4)]))}else at(k,FW/2,380);
 }
 function devUpdate(dt){
-  DEV.rstT=Math.max(0,(DEV.rstT||0)-dt);
+  DEV.rstT=Math.max(0,(DEV.rstT||0)-dt);DEV.sndT=Math.max(0,(DEV.sndT||0)-dt);
   for(const f of fx)f.t+=dt;for(let k=fx.length-1;k>=0;k--)if(fx[k].t>fx[k].life)fx.splice(k,1);
   ts+=((DEV.slow?.15:1)-ts)*Math.min(1,dt*12);shake*=Math.exp(-dt*9);
   if(DEV.move){const w=DEV.fast?3.2:1.1,ox=puck.x,oy=puck.y;DEV.a+=dt*w;puck.x=FW/2+Math.cos(DEV.a)*200;puck.y=FY0+250+Math.sin(DEV.a*1.3)*130;puck.vx=(puck.x-ox)/dt;puck.vy=(puck.y-oy)/dt}
@@ -1057,7 +1132,8 @@ function devTap(l){
   if(inR(l,{x:36,y:MID+14,w:60,h:38})){exitDev();return}
   if(inR(l,DEV_RST)){devReset();seq([880,660,440],.04,'square',.05);DEV.rstT=.4;return}
   for(let k=0;k<DEV_PAGES.length;k++)if(inR(l,devTab(k))){if((DEV.page|0)!==k){DEV.page=k;beep(990,.04)}return}
-  DEV_ROWS[DEV.page|0].forEach(([key],k)=>{const y=devRowY(k);if(l.v<y||l.v>y+30)return;
+  if((DEV.page|0)===2){DEV_SND.forEach(([lab,n,a],k)=>{if(!inR(l,devSndCell(k)))return;unlock();const args=n==='hit'||n==='smash'||n==='wall'||n==='post'?[a,FW/2]:n==='tick'?[a]:n==='goal'?[0]:[FW/2];_sfx(n,...args);DEV.sndLast=k;DEV.sndT=.3});return}
+  (DEV_ROWS[DEV.page|0]||[]).forEach(([key],k)=>{const y=devRowY(k);if(l.v<y||l.v>y+30)return;
     const d=l.u>160&&l.u<230?-1:l.u>370&&l.u<440?1:0;if(d){devStep(key,d);beep(d<0?520:780,.04)}});
   if((DEV.page|0)!==0)return; // エフェクトの試し撃ちは EFFECT ページだけ
   const all=DEV_FX.concat(DEV_TG);all.forEach((k,n)=>{if(!inR(l,devCell(n)))return;beep(880,.03);
@@ -1072,7 +1148,8 @@ function drawDev(){
     {const r=DEV_RST,f=(DEV.rstT||0)>0;pbox(r.x,r.y,r.w,r.h,f?YEL:'#a33',f?'#332':'#000');ptext('RESET',r.x+r.w/2,r.y+20,11,f?YEL:'#f66')}
     pbox(36,MID+14,60,38,'#666');ptext('<',66,MID+34,16,'#fff');
     DEV_PAGES.forEach((n,k)=>{const r=devTab(k),on=(DEV.page|0)===k;pbox(r.x,r.y,r.w,r.h,on?YEL:'#555',on?'#332':'#000');ptext(n,r.x+r.w/2,r.y+20,11,on?YEL:'#888')});
-    DEV_ROWS[DEV.page|0].forEach(([key,lab],k)=>{const y=devRowY(k);ptext(lab,40,y+17,8,'#888',PIX,'left');
+    if((DEV.page|0)===2){DEV_SND.forEach(([lab],k)=>{const r=devSndCell(k),on=DEV.sndLast===k&&(DEV.sndT||0)>0;pbox(r.x,r.y,r.w,r.h,on?YEL:'#777',on?'#332':'#000');ptext(lab,r.x+r.w/2,r.y+r.h/2+2,lab.length>6?9:10,'#fff',/[^\x00-\x7f]/.test(lab)?DOT:PIX)});ptext('タップで試聴（大事な音ほど大きく）',FW/2,MID+322,11,'#888',DOT);return}
+    (DEV_ROWS[DEV.page|0]||[]).forEach(([key,lab],k)=>{const y=devRowY(k);ptext(lab,40,y+17,8,'#888',PIX,'left');
       for(const [x,ch] of [[160,'<'],[370,'>']]){pbox(x,y,70,30,'#666');ptext(ch,x+35,y+17,14,'#fff')}
       ptext(devVal(key),FW/2,y+17,11,THEMES[key]?'#fff':YEL)});
     if((DEV.page|0)!==0)return;
@@ -1169,13 +1246,13 @@ function bounceOff(px,py,r,e){
 }
 const POST={fl:[0,0,0,0],t:0}; // ゴールポスト（ゴール口の両端）。当たると光る
 function postHit(x,y,v){const k=(x<FW/2?0:1)+(y<MID?0:2);POST.fl[k]=1;const now=performance.now();if(now-POST.t<90||v<60)return;POST.t=now;
-  beep(1568,.05,'square',.06);beep(2349,.16,'triangle',.05,.03);addFx('impact',x,y,clamp(v/12,30,90),'','');if(v>500)juice(6,.03,.3,.08)}
+  sfx('post',v,x);addFx('impact',x,y,clamp(v/12,30,90),'','');if(v>500)juice(6,.03,.3,.08)}
 function wall(x,y,sp){hit(x,y,sp,'',-1,x<=0?[1,0]:x>=FW?[-1,0]:y<=FY0?[0,1]:[0,-1])}
 function bumperHit(it,r){
   const v=bounceOff(it.x,it.y,r,1.25);if(v&&puck.sup>=0)breakItem(it); // スーパーシュート：跳ね返したあと壊れる
   if(v&&it.mega&&!it.dead){if(puck.par>=0||puck.boostT>0)it.hp=0;else it.hp--;if(it.hp<=0){breakItem(it);if(!placed.some(q=>q.mega&&!q.dead))bossFlinch(BOSSC.wallFl,'壁がこわれた!')}} // メガバンパー：パリィ・加速ショットなら一発
   if(v){puck.paT=0;if(BOSS.on)puck.lastTouch=-1; // ボス戦：バンパーで跳ね返った球もパリィできる
-    const sp=Math.hypot(puck.vx,puck.vy);if(sp<1){const nx=(puck.x-it.x)/(r+PR),ny=(puck.y-it.y)/(r+PR);puck.vx=nx*480;puck.vy=ny*480}else if(sp<480){puck.vx*=480/sp;puck.vy*=480/sp}it.hit=.25;seq([1568,2093],.04,'square',.06);hit(puck.x,puck.y,Math.max(v,400),'');juice(10,.04,.8,.15,'#aa55ff');addFx('wave',it.x,it.y,80,'','#aa55ff')}
+    const sp=Math.hypot(puck.vx,puck.vy);if(sp<1){const nx=(puck.x-it.x)/(r+PR),ny=(puck.y-it.y)/(r+PR);puck.vx=nx*480;puck.vy=ny*480}else if(sp<480){puck.vx*=480/sp;puck.vy*=480/sp}it.hit=.25;sfx('bump',puck.x);hit(puck.x,puck.y,Math.max(v,400),'');juice(10,.04,.8,.15,'#aa55ff');addFx('wave',it.x,it.y,80,'','#aa55ff')}
   return v;
 }
 /* スーパーシュートで設置物が壊れる（印を付けて substep の最後に取り除く） */
@@ -1183,7 +1260,7 @@ function breakItem(it){if(it.dead)return;it.dead=true;const c=IT[it.type].c;addF
 function sub(h,ms){
   const hp=h*SPD; // パックの時間：ゲームスピードはパックの動き（移動・減速・空中時間・加速）だけに掛かる
   puck.x+=puck.vx*hp;puck.y+=puck.vy*hp;
-  if(puck.air>0){puck.air-=hp;if(puck.air<=0){puck.air=0;puck.land=.3;slide(160,50,.25,'square',.1);juice(16,.06,.8,.2,YEL);noise(.2,.1);addFx('wave',puck.x,puck.y,120,'',YEL);addFx('impact',puck.x,puck.y,60,'','')}}
+  if(puck.air>0){puck.air-=hp;if(puck.air<=0){puck.air=0;puck.land=.3;sfx('land',puck.x);juice(16,.06,.8,.2,YEL);addFx('wave',puck.x,puck.y,120,'',YEL);addFx('impact',puck.x,puck.y,60,'','')}}
   const f=Math.exp(-.28*hp);puck.vx*=f;puck.vy*=f;
   if(puck.x<PR){puck.x=PR;wall(0,puck.y,Math.abs(puck.vx));puck.vx=Math.abs(puck.vx)*.92}
   if(puck.x>FW-PR){puck.x=FW-PR;wall(FW,puck.y,Math.abs(puck.vx));puck.vx=-Math.abs(puck.vx)*.92}
@@ -1234,7 +1311,7 @@ function sub(h,ms){
         // 進行方向はそのまま、速さだけ少し上げて上に跳ぶ
         const sp0=Math.hypot(puck.vx,puck.vy),sp=Math.min(Math.max(sp0*1.1,380),1760);
         if(sp0>1){puck.vx*=sp/sp0;puck.vy*=sp/sp0}else{puck.vx=0;puck.vy=fwd(it.o)*sp}
-        puck.airT=puck.air=1.25;puck.paT=0;it.hit=.35;slide(250,1600,.4,'square',.07);juice(6,0,.5,.1,YEL);addFx('wave',it.x,it.y,110,'',IT.jump.c);
+        puck.airT=puck.air=1.25;puck.paT=0;it.hit=.35;sfx('jump',puck.x);juice(6,0,.5,.1,YEL);addFx('wave',it.x,it.y,110,'',IT.jump.c);
         {const f=addFx('speed',it.x,it.y,1,'',YEL);if(f){f.nx=0;f.ny=fwd(it.o)}}
       }else if(it.type==='boost'&&Math.abs(dx*-it.dy+dy*it.dx)<r*.55+PR*.4&&Math.abs(dx*it.dx+dy*it.dy)<r){
         if(puck.sup>=0){breakItem(it);continue} // スーパーシュート：加速床は効果なしで壊れる
@@ -1242,12 +1319,12 @@ function sub(h,ms){
         const across=dx*-it.dy+dy*it.dx,sp=Math.min(Math.max(Math.hypot(puck.vx,puck.vy)*1.25,1280),2080);
         puck.x-=-it.dy*across*.35;puck.y-=it.dx*across*.35;
         puck.vx=it.dx*sp;puck.vy=it.dy*sp;puck.boostT=.875;puck.paT=0;if(it.boss)setTimeout(()=>breakItem(it),60); // ボスの加速床：通ったらすぐ壊れるif(BOSS.on&&!it.boss)puck.lastTouch=-1; // ボス戦：加速床を通った球はだれの球でもない（パリィできる）
-        if(it.hit<=0){slide(600,1800,.14,'sawtooth',.05);addFx('speed',puck.x,puck.y,1);juice(8,.04,1,.1,'#00ffff')}it.hit=.15;
+        if(it.hit<=0){sfx('boost',puck.x);addFx('speed',puck.x,puck.y,1);juice(8,.04,1,.1,'#00ffff')}it.hit=.15;
       }else if(it.type==='bumper'){bumperHit(it,r)
       }else if(it.type==='mud'&&Math.hypot(dx,dy)<r){if(puck.sup>=0){mud=true;breakItem(it);continue} // スーパーシュート：減速してから壊れる
         puck.paT=0;const k=Math.exp(-4*hp);puck.vx*=k;puck.vy*=k;const sp=Math.hypot(puck.vx,puck.vy);if(sp>304){puck.vx*=304/sp;puck.vy*=304/sp}mud=true}
     }
-    if(mud&&!puck.inMud){puck.vx*=.4;puck.vy*=.4;addFx('mud',puck.x,puck.y,1,'in');slide(220,50,.3,'sawtooth',.08);juice(8,.03,.3,.12,'#55ff55')}
+    if(mud&&!puck.inMud){puck.vx*=.4;puck.vy*=.4;addFx('mud',puck.x,puck.y,1,'in');sfx('mud',puck.x);juice(8,.03,.3,.12,'#55ff55')}
     if(!mud&&puck.inMud){puck.muddy=1.3;addFx('mud',puck.x,puck.y,.6,'out')}
     puck.inMud=mud;
     if(placed.some(q=>q.dead))placed=placed.filter(q=>{if(q.dead){drop(q);return false}return true});
@@ -1314,10 +1391,10 @@ function update(dt){
   if(state==='play'&&SUP.aim<0){const side=puck.y>MID?0:1;
     if(side!==puck.side){puck.side=side;puck.hold=0}
     else{const pv=puck.hold;puck.hold+=gd;const rem=holdLim(side)-puck.hold;
-      if(rem<3&&Math.floor(pv*2)!==Math.floor(puck.hold*2))beep(rem<1?1760:1175,.05,'square',.06);
+      if(rem<3&&Math.floor(pv*2)!==Math.floor(puck.hold*2))sfx('tick',rem<1);
       if(puck.hold>=holdLim(side))explode(side)}}
   puck.land=Math.max(0,puck.land-gd*SPD);puck.boostT=Math.max(0,puck.boostT-gd*SPD);
-  if(!live&&state==='play'&&Math.hypot(puck.vx,puck.vy)>24){live=true;for(const p of P)if(p.items.length)flashSlot(p,'#fff',.4);seq([1319,1760],.05,'square',.05)}
+  if(!live&&state==='play'&&Math.hypot(puck.vx,puck.vy)>24){live=true;for(const p of P)if(p.items.length)flashSlot(p,'#fff',.4);sfx('live')}
   puck.trail.push({x:puck.x,y:puck.y,sp:Math.hypot(puck.vx,puck.vy)});if(puck.trail.length>10)puck.trail.shift();
   for(const it of placed){if(live)it.age+=gd;it.hit=Math.max(0,it.hit-gd)}
   placed=placed.filter(it=>{if(it.age<it.life)return true;drop(it);return false});
