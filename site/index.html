@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.43">
+<meta name="version" content="1.44">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.43'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.44'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=1680,WIN=7; // MAXV＝パックの最高速（v1.37 で旧ゲームスピード0.8倍を基準＝100%に。パックの速さの値はすべて旧値の0.8倍）
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -415,7 +415,7 @@ function earlyCue(p){p.relT=0;addFx('early',p.x,p.y,1,'','#b8b8c8');beep(392,.06
 function parryStart(i,nx,ny){
   const sp0=Math.hypot(puck.vx,puck.vy),vn=puck.vx*nx+puck.vy*ny;let rx=puck.vx-2*vn*nx,ry=puck.vy-2*vn*ny,rl=Math.hypot(rx,ry); // 普通に跳ね返った向き（スワイプしなかったとき用）
   if(rl<1){rx=nx;ry=ny;rl=1}
-  if(BOSS.on&&i===0)BOSS.parries++;
+  if(BOSS.on&&i===0){BOSS.parries++;BOSS.delay=BOSSC.parDelay}
   PAR={who:i,t:PARC.t,T:PARC.t,dx:rx/rl,dy:ry/rl,sp:clamp(sp0*1.2,1728,2080)};
   puck.vx=puck.vy=0;puck.sup=-1;puck.par=-1;P[i].relT=0;
   addFx('wave',puck.x,puck.y,140,'',COL[i]);addFx('impact',puck.x,puck.y,70,'',COL[i]);juice(10,0,.8,.35,COL[i]);
@@ -531,7 +531,7 @@ function cpuUpdate(dt){
    プレイヤーの技とルールを盗んで使うボス。HP10（ゴール1点で1、パリィで返した球のゴールは2）。プレイヤーはライフ5。
    技の前兆はすべてボス陣地の「次の技ボックス」で分かる（いつも次の技の絵、使う1秒前に光って揺れ、名前が出る）。
    第1段階（HP10〜7）コピー／第2段階（6〜4）強奪／最終段階（3〜1）越境＝ルールの書き換え（メタ技）。 */
-const BOSSC={hp:10,lives:5,par2:2,flinch:1,tele:1.0,wallHP:3,spd:1.3,hold:2,widen:60,widenMax:120,tilt:120,rush:2.2,hudT:5,steal:2.5}; // 【調整値】
+const BOSSC={hp:10,lives:5,par2:2,flinch:1.5,whiff:2,wallFl:2.5,restore:3.5,parDelay:.5,tele:1.0,wallHP:2,spd:1.3,hold:2,widen:60,widenMax:120,tilt:120,rush:2.2,hudT:5,steal:2.5}; // 【調整値】
 const BOSS={on:false};
 const BOSS_ROT={1:['twin','wall'],2:['bparry','bsuper','steal','twin'],3:['wallbreak','rush','hud','bsuper','bparry']};
 const BOSS_NAME={twin:'ツイン加速ショット',wall:'メガバンパー',bparry:'パリィの構え',bsuper:'スーパーシュート',steal:'アイテムどろぼう',wallbreak:'ゴールの壁を壊す',rush:'とっしん',hud:'アイテム欄を壊す'};
@@ -557,6 +557,7 @@ function bossReady(k){const B=BOSS;
   if(k==='twin')return puck.y<MID-60&&puck.air===0;
   if(k==='steal')return P[0].box.on;
   if(k==='bsuper')return !P[1].pw;
+  if(k==='wall')return !placed.some(q=>q.mega&&!q.dead); // メガバンパーは重ねない（残っている間は出さない）
   return true}
 function bossNext(){const B=BOSS,R=BOSS_ROT[B.phase];B.rot[B.phase]=(B.rot[B.phase]+1)%R.length;B.next=R[B.rot[B.phase]]}
 function bossPlaceBoost(x,y,dx,dy){placed.push({id:++pid,type:'boost',x,y,o:1,age:0,life:3.4,hit:0,mesh:null,dx,dy,boss:true})}
@@ -608,7 +609,7 @@ function bossGoal(scorer,parGoal){const B=BOSS;
 function bossContinue(){const B=BOSS,ph=B.phase,hp=[0,10,6,3][ph],lives=BOSSC.lives+(B.fails[ph]>=2?2:0),keep={...B};
   bossStart();Object.assign(BOSS,{hp,lives,phase:ph,fails:keep.fails,t0:keep.t0,parries:keep.parries,par2:keep.par2,hint:false,next:BOSS_ROT[ph][0],banner:{t:2,a:'CONTINUE',b:lives>BOSSC.lives?'ライフ+2':''}});
   if(ph===3){SPD=BOSSC.spd;BOSS.hold2=true;BOSS.rw=['hold','spd']}}
-function useRestore(i,s){const B=BOSS,p=P[i];p.items.splice(s,1);SPD=B.spd0;B.hold2=false;GWB=GW;B.tilt=false;B.slotX=[0,0];B.rw=[];bossField();bossFlinch(3,'RESTORE!');
+function useRestore(i,s){const B=BOSS,p=P[i];p.items.splice(s,1);SPD=B.spd0;B.hold2=false;GWB=GW;B.tilt=false;B.slotX=[0,0];B.rw=[];bossField();bossFlinch(BOSSC.restore,'RESTORE!');
   addFx('wave',FW/2,MID,400,'','#ffffff');juice(24,.12,1.4,.8,'#ffffff');_seq([523,659,784,1047,1319,1568,2093],.06,'square',.07)}
 const holdLim=side=>BOSS.on&&BOSS.hold2&&side===0?BOSSC.hold:HOLD;
 const BTN=[{x:60,w:124,m:'cpu',l:0},{x:192,w:124,m:'cpu',l:1},{x:324,w:124,m:'cpu',l:2},{x:458,w:82,m:'boss',l:null},{x:60,w:152,m:'2p',l:null},{x:224,w:152,m:'net',l:null},{x:388,w:152,m:'opt',l:null}]; // 巻物＝ボス
@@ -1133,7 +1134,7 @@ function postHit(x,y,v){const k=(x<FW/2?0:1)+(y<MID?0:2);POST.fl[k]=1;const now=
 function wall(x,y,sp){hit(x,y,sp,'',-1,x<=0?[1,0]:x>=FW?[-1,0]:y<=FY0?[0,1]:[0,-1])}
 function bumperHit(it,r){
   const v=bounceOff(it.x,it.y,r,1.25);if(v&&puck.sup>=0)breakItem(it); // スーパーシュート：跳ね返したあと壊れる
-  if(v&&it.mega&&!it.dead){if(puck.par>=0||puck.boostT>0)it.hp=0;else it.hp--;if(it.hp<=0){breakItem(it);if(!placed.some(q=>q.mega&&!q.dead))bossFlinch(2,'壁がこわれた!')}} // メガバンパー：パリィ・加速ショットなら一発
+  if(v&&it.mega&&!it.dead){if(puck.par>=0||puck.boostT>0)it.hp=0;else it.hp--;if(it.hp<=0){breakItem(it);if(!placed.some(q=>q.mega&&!q.dead))bossFlinch(BOSSC.wallFl,'壁がこわれた!')}} // メガバンパー：パリィ・加速ショットなら一発
   if(v){puck.paT=0;if(BOSS.on)puck.lastTouch=-1; // ボス戦：バンパーで跳ね返った球もパリィできる
     const sp=Math.hypot(puck.vx,puck.vy);if(sp<1){const nx=(puck.x-it.x)/(r+PR),ny=(puck.y-it.y)/(r+PR);puck.vx=nx*480;puck.vy=ny*480}else if(sp<480){puck.vx*=480/sp;puck.vy*=480/sp}it.hit=.25;seq([1568,2093],.04,'square',.06);hit(puck.x,puck.y,Math.max(v,400),'');juice(10,.04,.8,.15,'#aa55ff');addFx('wave',it.x,it.y,80,'','#aa55ff')}
   return v;
@@ -1173,7 +1174,7 @@ function sub(h,ms){
           const sp=Math.hypot(puck.vx,puck.vy);BOSS.stance=0;
           if(sp>=PARC.s&&Math.abs(puck.vx)/sp<.42){const tx=FW/2+rnd(-70,70),ty=FY1+30;let dx=tx-puck.x,dy=ty-puck.y;const d=Math.hypot(dx,dy),v=clamp(sp*1.2,1728,2080); // 正面の強打はパリィで返される
             Object.assign(puck,{vx:dx/d*v,vy:dy/d*v,par:1,parT:2,lastTouch:1,boostT:1.125,sup:-1});addFx('wave',puck.x,puck.y,140,'',COL[1]);juice(10,.22,.8,.35,COL[1]);slide(280,2600,.3,'sawtooth',.07);beep(2637,.14,'triangle',.06,.3);BOSS.cap=1.2;BOSS.capTxt='パリィされた!';return}
-          bossFlinch(1.5,'からぶり!')} // 角度のある球・遅い球は空振り → ボスが止まる
+          bossFlinch(BOSSC.whiff,'からぶり!')} // 角度のある球・遅い球は空振り → ボスが止まる
         if(BOSS.on&&m.i===1&&puck.par===0)bossFlinch(BOSSC.flinch); // パリィで返した球を受けるとボスがひるむ
         if(puck.par>=0)puck.par=-1; // パリィのオーラは次に触れたら消える
         puck.lastTouch=m.i; // 最後にパックに触ったマレット（パリィの条件）
@@ -1233,6 +1234,7 @@ function update(dt){
   if(state==='title'&&BOSS.on)bossOff();
   if(state==='title'||state==='options'||state==='lobby')return;
   if(PAR.who>=0&&state==='play'){PAR.t-=dt;const a=superAimDir(PAR.who);if(a){PAR.dx=a.dx;PAR.dy=a.dy}if(PAR.t<=0)parryFire(PAR.dx,PAR.dy)} // パリィ：パックとタイマーは止まる（時間切れは狙いの向きへ）。守る側は下で40%の速さで動ける
+  if(BOSS.on&&BOSS.delay>0)BOSS.delay-=dt;
   cpuUpdate(dt);bossUpdate(dt);
   if(SUP.aim>=0&&state==='play'){const i=SUP.aim;SUP.t-=dt;const a=superAimDir(i);if(a){SUP.dx=a.dx;SUP.dy=a.dy}
     if(mode==='cpu'&&i===1){if(SUP.t<SUP_AIM-.6){const dx=FW/2+(P[0].x>FW/2?-1:1)*rnd(40,90)-puck.x,dy=FY1+40-puck.y,d=Math.hypot(dx,dy);SUP.dx=dx/d;SUP.dy=dy/d;superFire()}} // CPU：少し狙ってゴールへ
@@ -1240,6 +1242,7 @@ function update(dt){
   const ms=P.map(p=>{
     const stopNow=SUP.aim>=0||PAR.who>=0&&state==='play'; // スーパーシュートの構え・パリィの停止中
     if(stopNow&&(p.i===SUP.aim||p.i===PAR.who)){p.vx=p.vy=0;return {i:p.i,ox:p.x,oy:p.y,nx:p.x,ny:p.y,vx:0,vy:0,x:p.x,y:p.y}} // 狙っている人は動かない（狙いは指の位置で決まる）
+    if(BOSS.on&&p.i===1&&BOSS.delay>0){p.vx=p.vy=0;return {i:p.i,ox:p.x,oy:p.y,nx:p.x,ny:p.y,vx:0,vy:0,x:p.x,y:p.y}} // パリィされた直後、ボスは少し遅れて動き出す
     if(p.stun>0){if(!stopNow)p.stun=Math.max(0,p.stun-dt);p.vx=p.vy=0;return {i:p.i,ox:p.x,oy:p.y,nx:p.x,ny:p.y,vx:0,vy:0,x:p.x,y:p.y}} // スタン中は動けない
     const ox=p.x,oy=p.y;let dx=p.tx-ox,dy=p.ty-oy;const inM=placed.some(it=>it.type==='mud'&&Math.hypot(ox-it.x,oy-it.y)<IT.mud.r);const d=Math.hypot(dx,dy),mx=(p.maxV||3400)*(p.boost||1)*(inM?.4:1)*(stopNow?STOP_MV:1)*dt; // 人の指に追従するマレットは実時間、CPUは世界の速度に合わせる
     if(inM&&d>5&&Math.random()<dt*10)addFx('mud',ox+rnd(-30,30),oy+rnd(-30,30),.7,'bub');
