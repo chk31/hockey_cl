@@ -21,7 +21,7 @@
 3. ホームへのスワイプを止めたいときは アクセスガイド（設定 → アクセシビリティ）。
 
 ## バージョン
-- タイトル画面のメニュー枠の右下に `v1.50` のように表示（`site/index.html` の `VER`）。更新のたびに上げる。
+- タイトル画面のメニュー枠の右下に `v1.51` のように表示（`site/index.html` の `VER`）。更新のたびに上げる。
 - 公開ページが最新か迷ったら、この番号で確認する。
 
 ## 実装メモ
@@ -54,6 +54,7 @@
 - GAME ページ：PARRY WIN（パリィの受付時間 10〜300ms・5ms刻み、標準 100ms）と PARRY STOP（止まる時間 0.1〜2.0秒、標準 1.0秒）、PARRY SPD（パリィできるパックの速さの下限 300〜1600、標準 800）はここで変えた値が保存され、ゲームに使われる（パックの速さ設定とは独立、オンラインはホストの値）。
 
 ## ツール
+- `tools/vfx/`：コードだけで描くピクセルの VFX（`vfx.js`）とプレビュー（`preview.html`）。**空間が砕けるアーク**（三日月の斬撃がひびで割れて破片が飛ぶ）、**降着円盤**（黒い穴と白い光子リング、内側ほど熱く回る円盤、最後に吸い込まれて閃く）、**衝撃波**（ARCADE のスマッシュ）。極座標・値ノイズ・Bayer ディザ・暗い縁取りのパレットで、低解像度のバッファに描いて nearest-neighbor で拡大する。`cd tools/vfx && python3 -m http.server 8083` → `http://localhost:8083/preview.html`（`?stress=10` で同時に10個ずつ出して負荷を見る）。
 - `tools/howto/`：遊び方ページの動画（`site/howto/*.mp4`）を撮る台本。Playwright でゲームを実際に動かして録画し、ffmpeg で切り出す（指の位置は白い輪で表示）。`cd tools/howto && npm i` のあと、`site/` を `http://localhost:8081/` で配信して `node s_basic.js`／`node s_more.js [hold box parry jump boost bumper slime super]`。出力は `tools/howto/out/`（`site/howto/` へコピーし、`ffmpeg -ss 0.6 -i X.mp4 -frames:v 1 -vf scale=300:-2 X.jpg` で表紙画像を作る）。
 - `tools/slime_gen.py`：ぬかるみを床に置いたときのスライム（上から見た図、24px×4コマ）を生成。床に貼り付いた形・飛び散ったしずくと糸・つや・泡。`site/fx/slime.png`。
 - `tools/claude_gen.py`：FX STYLE「CLAUDE」のドット絵（impact 6コマ／smash 7コマ×8方向／goal 10コマ／紙吹雪の＊）を生成。色はパレット番号で `site/fx/claude_*.png` に保存し、FX COLOR で着色する（FX COLOR を CLAUDE にすると暖色の見た目になる）。

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VFX プレビュー</title>
+<style>
+/* ピクセルの VFX プレビュー：低解像度のバッファに1ドットずつ描き、nearest-neighbor で拡大する */
+body{margin:0;background:#05061a;color:#ccd;font:13px monospace}
+#wrap{display:flex;flex-wrap:wrap;gap:16px;padding:16px}
+.cell{display:flex;flex-direction:column;align-items:center;gap:6px}
+canvas{image-rendering:pixelated;image-rendering:crisp-edges;background:#0b0f3a;border:2px solid #223}
+#fps{position:fixed;right:10px;top:8px;color:#7f7}
+</style></head><body>
+<div id="fps">fps</div>
+<div id="wrap"></div>
+<script src="vfx.js"></script>
+<script>
+// 3つのエフェクトを、同じ盤面色の上でループ再生する。?stress=N で同時発生数を増やして負荷を見る
+const Q=new URLSearchParams(location.search),STRESS=+(Q.get('stress')||1);
+const W=document.getElementById('wrap'),items=[];
+for(const [name,fn,life,lab] of [['arc',VFX.arc,.7,'空間が砕けるアーク'],['hole',VFX.hole,1.2,'降着円盤（ブラックホール）'],['shock',VFX.shock,.6,'ARCADE スマッシュ（衝撃波）']]){
+  const d=document.createElement('div');d.className='cell';const c=document.createElement('canvas');c.width=96;c.height=96;c.style.width='384px';c.style.height='384px';
+  const l=document.createElement('div');l.textContent=lab;d.append(c,l);W.append(d);items.push({c,g:c.getContext('2d'),fn,life,t:Math.random()*life,name})}
+let last=performance.now(),fr=0,acc=0,fpsShow=0;window.__fps=[];window.__ms=[];
+function loop(now){const dt=Math.min(.05,(now-last)/1000);last=now;acc+=dt;fr++;if(acc>=.5){fpsShow=Math.round(fr/acc);window.__fps.push(fpsShow);document.getElementById('fps').textContent=fpsShow+' fps';fr=0;acc=0}
+  if(window.__stop){requestAnimationFrame(loop);return} // 確認用：止めて固定の絵を見る
+  const t0=performance.now();
+  for(const it of items){it.t=(it.t+dt)%(it.life+.25);const g=it.g;g.fillStyle='#0b0f3a';g.fillRect(0,0,96,96);
+    for(let k=0;k<STRESS;k++){const p=Math.min(1,it.t/it.life);if(p<1)it.fn(g,48,48,p,{seed:k*13+1,ang:-.5,n:96})}}
+  window.__ms.push(performance.now()-t0);requestAnimationFrame(loop)}
+requestAnimationFrame(loop);
+// 確認用：固定の進み具合で描く
+window.__draw=(name,p)=>{window.__stop=1;const it=items.find(i=>i.name===name);const g=it.g;g.fillStyle='#0b0f3a';g.fillRect(0,0,96,96);it.fn(g,48,48,p,{seed:1,ang:-.5,n:96})};
+</script></body></html>
