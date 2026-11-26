@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.47">
+<meta name="version" content="1.48">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.47'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.48'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=1680,WIN=7; // MAXV＝パックの最高速（v1.37 で旧ゲームスピード0.8倍を基準＝100%に。パックの速さの値はすべて旧値の0.8倍）
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -70,17 +70,27 @@ const THEMES={
     // CLAUDE：テラコッタ系のオレンジ、クリーム、ウォームグレーの暖色パレット
     {n:'CLAUDE',spk:['#f0eee6','#d97757','#c15f3c','#b0aea5'],tr:['#d97757','#e8a07f','#f0eee6','#c15f3c','#b0aea5','#f5c4a8'],fire:['#d97757','#c15f3c','#f0eee6','#ffffff']},
     // NULL：端末の緑（明るい緑・薄い緑・深い緑）＋エラーの赤と橙。ボス「NULL」の色
-    {n:'NULL',spk:['#c8ffd8','#3dff7a','#23c45e','#ff3355'],tr:['#ff3355','#ff8a3d','#ffd84a','#3dff7a','#2fd6a8','#c8ffd8'],fire:['#ff3355','#ff8a3d','#3dff7a','#ffffff'],lock:1}],
+    {n:'NULL',spk:['#c8ffd8','#3dff7a','#23c45e','#ff3355'],tr:['#3dff7a','#23c45e','#c8ffd8','#3dff7a','#1f9a4a','#c8ffd8'],fire:['#ff3355','#ff8a3d','#3dff7a','#ffffff'],lock:1,goal:'#3dff7a'}],
   lv:[{n:'FULL'},{n:'LITE'},{n:'MIN'}],
   st:[{n:'ARCADE'},{n:'KAWAII'},{n:'WEB90'},{n:'CLAUDE'},{n:'NULL',lock:1}] // NULL：記号でできたエフェクト（ボス撃破で OPTION に出る）
 };
 let TH={puck:0,field:0,fx:0,st:0,lv:0};
+let TH2={st:0,fx:0}; // 同じ端末の2P：上側（2P）のエフェクトの STYLE と COLOR（OPTION の 2P タブ）
+const NULLFX={st:4,fx:7}; // ボスのエフェクト
+/* エフェクトはそれぞれ出した人の設定で描く。o＝0（下・1P）／1（上・2P）。ボス戦の2P側＝NULL、オンラインの相手＝相手の設定、2P対戦の上側＝TH2 */
+function sideFX(o){if(o!==0&&o!==1)return TH;
+  if(BOSS&&BOSS.on)return o===1?NULLFX:TH;
+  if(mode==='online'&&NET.open){const me=NET.role==='guest'?1:0;return o===me?TH:(NET.oth||TH)}
+  if(mode==='2p')return o===1?TH2:TH;
+  return TH}
+function withSide(o,fn){const st=TH.st,fx=FXT,S=sideFX(o);if(S===TH)return fn();TH.st=S.st;FXT=THEMES.fx[S.fx]||FXT;try{return fn()}finally{TH.st=st;FXT=fx}}
 const kawaii=()=>TH.st===1;
 const nullS=()=>TH.st===4; // NULL：{}[]/01 などの記号が飛び散る・流れる・噴き上がる（impact / smash / goal だけ専用、他は ARCADE）
 const claudeS=()=>TH.st===3; // CLAUDE：吹き出し・考え中の「…」・＊のキラキラ（impact / smash / goal だけ専用、他は ARCADE）
 const web90=()=>TH.st===2; // 90年代Web風：Win95の立体ボタン／ポップアップ窓・虹色のライン・キラキラGIF・マーチングアンツ・工事中テープ・矢印カーソル
 const lite=()=>TH.lv>=1,minimal=()=>TH.lv===2;
 try{const t=JSON.parse(localStorage.getItem('ah_theme')||'{}');for(const k in TH)if(THEMES[k][t[k]])TH[k]=t[k]}catch(e){}
+TH2={st:TH.st,fx:TH.fx};try{const t=JSON.parse(localStorage.getItem('ah_theme2')||'null');if(t){if(THEMES.st[t.st])TH2.st=t.st;if(THEMES.fx[t.fx])TH2.fx=t.fx}}catch(e){}
 let FXT=THEMES.fx[0],PK=THEMES.puck[0];
 /* パックの速さ（OPTION の PUCK SPEED バー）：50〜150%（100%＝旧ゲームスピード0.8倍）。パックの動き（移動・減速・空中時間・加速）だけがこの倍率で進み、
    タイマー（4秒ルール・アイテムの寿命・スタン等）・マレット・CPU は実時間のまま。オンラインはホストの設定が両者に適用される */
@@ -350,12 +360,14 @@ function addFx0(k,x,y,s=1,txt='',col=YEL){
     if(k==='impact'&&fx.filter(f=>f.k==='impact').length>=2)return null;if(k==='impact'||k==='wave')s*=.6}
   if(fx.length>90)fx.shift();
   const o={k,x,y,s,txt,col,t:0,a0:Math.random()*6,life:k==='mud'?(MUD_LIFE[txt]||.6):FX_LIFE[k],i:y>MID?0:1};fx.push(o);
-  if(k==='stop')o.life=s+.22; // ヒットストップの長さ＋少しの余韻
+  o.who=col===COL[1]?1:col===COL[0]?0:o.i; // 持ち主＝その人の色（打った人・点を取った人）、色がなければ場所の側
+  withSide(o.who,()=>fxLife(o,k));return o}
+function fxLife(o,k){
+  if(k==='stop')o.life=o.s+.22; // ヒットストップの長さ＋少しの余韻
   if(claudeS()){const L={impact:1.15,smash:1.3}[k];if(L)o.life*=L}
   if(nullS()){const L={impact:1.3,smash:1.25}[k];if(L)o.life*=L} // NULL は記号を見せるため少し長め // CLAUDE はコマを見せるため少し長め
   if(web90()&&k!=='fly'&&k!=='goal'&&k!=='stop')o.life*=.75; // WEB90 は短めに
   if(kawaii()){const L={impact:1.7,wave:1.4,smash:1.5,speed:1.6,mud:1.6,goal:1.25,spawn:1.2}[k];if(L)o.life*=L}
-  return o;
 }
 let lastHit=0;
 function juice(sh,stop,a,fl,col='#ffffff'){relay(['j',sh,stop,a,fl,ck(col)]);hitstop=Math.max(hitstop,stop);if(stop>0&&minimal())stopCue(stop,col); // ヒットストップは FX LEVEL に関係なく発生（MIN でも）
@@ -555,9 +567,8 @@ function bossStart(){
   Object.assign(BOSS,{on:true,hp:BOSSC.hp,lives:BOSSC.lives,phase:1,rot:{1:0,2:0,3:0},next:'twin',cool:1.4,tele:0,teleK:null,wait:0,stance:0,rush:0,steal:0,slotX:[0,0],
     rw:[],hold2:false,tilt:false,spd0,round:0,wallRound:-9,t0:performance.now(),parries:0,par2:0,fails:{1:0,2:0,3:0},banner:{t:2.4,a:'BOSS',b:'NULL'},rwT:0,hint:true,result:null,cap:0,capTxt:''});
   SPD=spd0;GWB=GW;P[1].maxV=LV[3].sp;bossField();serve(1);
-  if(!BOSS.th0)BOSS.th0={st:TH.st,fx:TH.fx};TH.st=4;TH.fx=THEMES.fx.length-1;FXT=THEMES.fx[TH.fx]; // ボス戦のエフェクトは NULL（設定は保存しない）
 }
-function bossOff(){if(!BOSS.on)return;BOSS.on=false;SPD=BOSS.spd0;GWB=GW;bossField();if(BOSS.th0){TH.st=BOSS.th0.st;TH.fx=BOSS.th0.fx;FXT=THEMES.fx[TH.fx];BOSS.th0=null}}
+function bossOff(){if(!BOSS.on)return;BOSS.on=false;SPD=BOSS.spd0;GWB=GW;bossField()}
 function bossField(){ // 下のゴールの幅に合わせて、3D の端のレール・ゴール口・ポストを動かす
   if(!has3D||!meshes.endB)return;const seg0=(FW-GW)/2,seg=(FW-GWB)/2;
   for(const {r,s} of meshes.endB){r.scale.x=seg/seg0;r.position.x=s*(GWB/2+seg/2)}
@@ -667,7 +678,7 @@ const TURN_STATIC=[
 const PEER_CONFIG={debug:1,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'}].concat(TURN_STATIC)}}; // TURN_CFG を設定した場合は、取得した分を後から足す
 if(RELAY_ONLY)PEER_CONFIG.config.iceTransportPolicy='relay';
 try{const q=new URLSearchParams(location.search).get('ps');if(q){const [h,pt]=q.split(':');Object.assign(PEER_CONFIG,{host:h,port:+pt||9000,path:'/',secure:false})}}catch(e){} // 開発用：?ps=localhost:9000 で自前のPeerServer
-const PV=6,PREFIX='aihockey-',DMIN=25,DMAX=120,SNAP_MS=15,TIMEOUT=3000;
+const PV=7,PREFIX='aihockey-',DMIN=25,DMAX=120,SNAP_MS=15,TIMEOUT=3000;
 let viewFlip=false,noFwd=false,rctx=false;
 const NET={turn:0,path:'',role:null,peer:null,ev:null,st:null,gp:null,open:false,code:'',fxq:[],evq:[],snaps:[],applied:null,off:null,lastRx:0,lastSnap:0,lastPing:0,rtt:-1,ptrs:new Map(),myPtr:null,dly:60,jit:10,gap:17,lastHt:0,seq:0,rseq:new Map(),disc:0,cto:0};
 const LOB={sub:'menu',input:'',err:0,busy:false};
@@ -680,7 +691,7 @@ const guestOn=()=>NET.role==='guest'&&mode==='online'&&(state==='play'||state===
 function send(m,fast){m.v=PV;const c=fast&&NET.st&&NET.st.open?NET.st:NET.ev;if(c&&c.open)try{c.send(m)}catch(e){}}
 function setFlip(f){if(viewFlip!==f){viewFlip=f;resize()}}
 function clearMatch(){SUP.aim=-1;puck.sup=-1;PAR.who=-1;puck.par=-1;NET.lastHt=0;NET.praw=null;NET.perr=null;placed.forEach(drop);placed=[];drags.clear();arm[0]=arm[1]=null;fx.length=0;NET.snaps=[];NET.evq=[];NET.applied=null;NET.myPtr=null;NET.ptrs.clear();ts=1}
-function netReset(){
+function netReset(){NET.oth=null;
   const pr=NET.peer,cs=[NET.ev,NET.st];
   Object.assign(NET,{peer:null,role:null,ev:null,st:null,gp:null,open:false,fxq:[],off:null,rtt:-1});clearTimeout(NET.cto);LOB.busy=false;
   for(const c of cs)if(c)try{c.close()}catch(e){}
@@ -701,7 +712,7 @@ function wire(c){
 }
 function onOpen(){
   NET.path='';setTimeout(checkPath,1500);setTimeout(checkPath,5000);
-  if(NET.open)return;NET.open=true;NET.lastRx=hnow();clearTimeout(NET.cto);LOB.busy=false;
+  if(NET.open)return;NET.open=true;NET.lastRx=hnow();clearTimeout(NET.cto);LOB.busy=false;send({t:'th',st:TH.st,fx:TH.fx});
   if(NET.role==='host'){hostBegin()}else{LOB.sub='ready';_seq([988,1319],.07)}
 }
 function hostBegin(){noFwd=true;try{clearMatch();start('online')}finally{noFwd=false}setFlip(false);send({t:'start'})}
@@ -747,6 +758,7 @@ function rx(d){
   case 'ping':send({t:'pong',ts:d.ts});return;
   case 'pong':{const r=hnow()-d.ts;NET.rtt=NET.rtt<0?r:NET.rtt*.7+r*.3;return}
   case 'bye':netLost();return;
+  case 'th':if(THEMES.st[d.st]&&THEMES.fx[d.fx])NET.oth={st:d.st,fx:d.fx};return; // 相手のエフェクトの設定
   }
   if(NET.role==='host'){
     if(mode!=='online')return;
@@ -1337,6 +1349,9 @@ function trail(){
   if(minimal())return;
   if(puck.air>0)return;const n=puck.trail.length;
   const FIRE=FXT.fire,RB=FXT.tr;
+  if(nullS()){g.save();g.textAlign='center';g.textBaseline='middle';const C=FXT.spk,fr=Math.floor(clock*16);
+    puck.trail.forEach((t,k)=>{if(t.sp<300||k===n-1)return;const q=k/n,hot=t.sp>1120,sz=snap((hot?26:20)*q+6,2);gtx(NGL[(k*7+fr+Math.floor(t.x/40))%NGL.length],t.x,t.y,sz,hot?(k%2?'#ffffff':C[3]):C[k%3])});
+    g.restore();if(!lite()&&puck.air===0&&Math.hypot(puck.vx,puck.vy)>1120&&Math.random()<.6)addFx('impact',puck.x,puck.y,8,'','');return}
   puck.trail.forEach((t,k)=>{if(t.sp<400||k===n-1)return;const q=k/n,hot=t.sp>1120;
     if(web90()){const sz=snap(PR*1.1*q,2);if(sz<4)return;const x=snap(t.x,4),y=snap(t.y,4),c=(hot?FIRE:RB)[k%(hot?4:6)];g.fillStyle='#000';g.fillRect(x-sz/2-2,y-sz/2-2,sz+4,sz+4);g.fillStyle=c;g.fillRect(x-sz/2,y-sz/2,sz,sz);g.fillStyle='#fff';g.fillRect(x-sz/2,y-sz/2,sz,2);return} // 点線のような小さな四角の軌跡
     if(kawaii()){ks(hot?'star':KSH[k%2?0:3],t.x+Math.sin(clock*12+k)*4,t.y+Math.cos(clock*12+k)*4,PR*(hot?1.6:1.2)*q*(1+.2*Math.sin(clock*20+k)),(hot?FIRE:RB)[(k+Math.floor(clock*12))%(hot?4:6)],clock*4+k*.7);return}
@@ -1554,7 +1569,7 @@ function drawNull(f){
     g.fillStyle='#000';g.fillRect(Math.cos(a)*L-14,Math.sin(a)*L-19,30,38);g.fillStyle=C[1];if(Math.floor(f.t*12)%2===0||p<.3)g.fillRect(Math.cos(a)*L-11,Math.sin(a)*L-16,24,32)} // ブロックのカーソル
   else{ // goal：ゴール口から記号の柱が噴き上がる。点を取った側の陣地に記号の雨
     const dir=f.y<MID?1:-1,cols=16,fr=Math.floor(f.t*14),q=Math.min(1,p/.35),out=p>.8?1-(p-.8)/.2:1,T=FXT.tr;
-    for(let c=0;c<cols;c++){const x=FW/2+(c-(cols-1)/2)*26,h=(140+hash(c*7)*260)*eOut(q)*out,n=Math.floor(h/18),col=T[Math.floor(c/cols*T.length)%T.length];
+    for(let c=0;c<cols;c++){const x=FW/2+(c-(cols-1)/2)*26,h=(140+hash(c*7)*260)*eOut(q)*out,n=Math.floor(h/18),col=FXT.goal||T[Math.floor(c/cols*T.length)%T.length];
       for(let k=0;k<n;k++)gtx(NGL[(k*5+c*3+fr)%NGL.length],x,f.y+dir*(20+k*18),k===n-1?16:13,k===n-1?'#ffffff':col)}
     gtx('|/\\[]{}()01;:._-*+#@$'.slice(0,Math.ceil(21*q)),FW/2,f.y+dir*8,12,C[0]);
     if(!lite()&&p>.3){const sc=f.y<MID?0:1;for(let k=0;k<40;k++){const x=snap(hash(k)*FW,6),y=(sc?FY0:MID)+((hash(k+9)*FL/2+(p-.3)*420*(1+hash(k+3)))%(FL/2));gtx(ngl(k+fr),x,y,10,C[k%3])}}}
@@ -1714,14 +1729,17 @@ function panel(i,lines,col,h=230){
     lines.forEach(l=>{if(l.blink&&!blink(2))return;ptext(l.t,FW/2,y+l.y,l.s,l.c||'#fff',l.f||PIX)});
   });
 }
-let optTitleT=0;
+let optTitleT=0,optP=0; // optP＝OPTION の FX STYLE・COLOR を 1P／2P どちらの設定として編集するか
+const OPT_TAB={x:448,y:MID+12+10,w:96,h:36};
 const OY0=MID+12,OPT_ROWS=['puck','field','st','fx','lv'],OPT_LBL={puck:'PUCK',field:'FIELD',st:'FX STYLE',fx:'FX COLOR',lv:'FX LEVEL'},rowY=k=>OY0+54+k*60,SP_Y=OY0+354,OK_Y=OY0+418,SB_X=96,SB_W=37;
 let spdPtr=null;const spdAt=u=>SPD_MIN+clamp(Math.floor((u-SB_X+3)/SB_W),0,SPD_N-1)/10;
 function optTap(l,id){
   if(l.v>OY0+8&&l.v<OY0+52&&l.u>180&&l.u<420){const t=performance.now();if(t-optTitleT<600){optTitleT=0;enterDev()}else optTitleT=t;return} // OPTION の文字を2回連続タップ → 開発者画面
+  if(inR(l,OPT_TAB)){optP=l.u<OPT_TAB.x+OPT_TAB.w/2?0:1;beep(700,.04);return}
   if(l.v>=SP_Y-2&&l.v<=SP_Y+58&&l.u>56&&l.u<544){setSpeed(spdAt(l.u));spdPtr=id;beep(400+SPD*400,.04);return}
   OPT_ROWS.forEach((key,k)=>{const y=rowY(k);if(l.v<y||l.v>y+58)return;const n=THEMES[key].length;
-    const step=d=>{let v=TH[key];for(let k=0;k<n;k++){v=(v+n+d)%n;if(!THEMES[key][v].lock||bossBest().clear)break}TH[key]=v;applyTheme()}; // ボスを倒すまで NULL は選べない
+    const two=optP&&(key==='st'||key==='fx'),O=two?TH2:TH; // 2P タブ：上側の人の FX STYLE・COLOR
+    const step=d=>{let v=O[key];for(let k=0;k<n;k++){v=(v+n+d)%n;if(!THEMES[key][v].lock||bossBest().clear)break}O[key]=v;if(two){try{localStorage.setItem('ah_theme2',JSON.stringify(TH2))}catch(e){}}else applyTheme()}; // ボスを倒すまで NULL は選べない
     if(l.u>56&&l.u<136){step(-1);beep(520,.04)}else if(l.u>464&&l.u<544){step(1);beep(780,.04)}});
   if(l.v>OK_Y&&l.v<OK_Y+52&&l.u>200&&l.u<400){state='title';beep(880,.05)}
 }
@@ -1729,16 +1747,18 @@ function circle(x,y,r,c){g.fillStyle=c;g.beginPath();g.arc(x,y,r,0,7);g.fill()}
 function drawOptions(){
   g.fillStyle='rgba(0,0,0,.6)';g.fillRect(-40,FY0,FW+80,FL);
   frame(0,()=>{pbox(36,OY0,FW-72,484,COL[0]);ptext('OPTION',FW/2,OY0+30,18,YEL);
-    OPT_ROWS.forEach((key,k)=>{const y=rowY(k),t=THEMES[key][TH[key]];
-      ptext(OPT_LBL[key],FW/2,y+4,9,'#888');
+    {const r=OPT_TAB;for(let j=0;j<2;j++){const on=optP===j;pbox(r.x+j*r.w/2,r.y,r.w/2,r.h,on?COL[j]:'#555',on?'#222':'#000');ptext((j+1)+'P',r.x+j*r.w/2+r.w/4,r.y+r.h/2+2,10,on?'#fff':'#777')}}
+    const T=optP?Object.assign({},TH,TH2):TH; // 2P タブのときは FX STYLE・COLOR だけ 2P の設定
+    OPT_ROWS.forEach((key,k)=>{const y=rowY(k),t=THEMES[key][T[key]];
+      ptext(OPT_LBL[key]+(optP&&(key==='st'||key==='fx')?'  (2P)':''),FW/2,y+4,9,optP&&(key==='st'||key==='fx')?COL[1]:'#888');
       for(const [x,ch] of [[56,'<'],[464,'>']]){pbox(x,y+8,80,46,'#666');ptext(ch,x+40,y+32,18,'#fff')}
       ptext(t.n,FW/2,y+24,13,'#fff');
       const py=y+44;
       if(key==='puck'){circle(FW/2,py,12,'#000');circle(FW/2,py,10,t.b);g.strokeStyle=t.r;g.lineWidth=3;g.beginPath();g.arc(FW/2,py,6,0,7);g.stroke()}
       else if(key==='field'){[0,1].forEach(j=>{g.fillStyle='#000';g.fillRect(FW/2-46+j*48,py-9,44,18);g.fillStyle=t.h[1-j];g.fillRect(FW/2-44+j*48,py-7,40,14);g.fillStyle=t.c[j];g.fillRect(FW/2-36+j*48,py-4,24,8)})}
-      else if(key==='st'){if(TH.st===3&&CL.imp.idx&&CL.goal.idx){g.save();g.imageSmoothingEnabled=false;clFrame(CL.imp,32,32,2,0,FW/2-34,py,30,30);clFrame(CL.goal,64,64,4,0,FW/2+22,py-2,46,46);g.restore()}
-        else if(TH.st===2){bevSq(FW/2-38,py,7,2);g.save();g.setLineDash([4,4]);g.strokeStyle='#fff';g.lineWidth=2;g.strokeRect(FW/2-8,py-7,16,14);g.restore();rbar(FW/2+22,py-4,30,8,2)}
-        else if(TH.st){ks('heart',FW/2-30,py,16,FXT.tr[0]);ks('star',FW/2,py,18,FXT.tr[2]);ks('spark',FW/2+30,py,16,'#fff')}else for(let j=0;j<3;j++){sq(FW/2-30+j*30,py,14,'#000');sq(FW/2-30+j*30,py,10,FXT.spk[j+1])}}
+      else if(key==='st'){if(T.st===4){g.save();g.textAlign='center';g.textBaseline='middle';['{','0','}'].forEach((c,j)=>gtx(c,FW/2-30+j*30,py,16,THEMES.fx[T.fx].spk[j]));g.restore()}else if(T.st===3&&CL.imp.idx&&CL.goal.idx){g.save();g.imageSmoothingEnabled=false;clFrame(CL.imp,32,32,2,0,FW/2-34,py,30,30);clFrame(CL.goal,64,64,4,0,FW/2+22,py-2,46,46);g.restore()}
+        else if(T.st===2){bevSq(FW/2-38,py,7,2);g.save();g.setLineDash([4,4]);g.strokeStyle='#fff';g.lineWidth=2;g.strokeRect(FW/2-8,py-7,16,14);g.restore();rbar(FW/2+22,py-4,30,8,2)}
+        else if(T.st){ks('heart',FW/2-30,py,16,FXT.tr[0]);ks('star',FW/2,py,18,FXT.tr[2]);ks('spark',FW/2+30,py,16,'#fff')}else for(let j=0;j<3;j++){sq(FW/2-30+j*30,py,14,'#000');sq(FW/2-30+j*30,py,10,FXT.spk[j+1])}}
       else if(key==='fx')t.spk.concat(t.tr.slice(0,2)).forEach((c,j)=>sq(FW/2-50+j*20,py,j%2?9:12,c));
       else for(let j=0;j<5;j++)sq(FW/2-40+j*20,py,6,j<[5,2,1][TH.lv]?'#fff':'#333');
     });
@@ -1791,7 +1811,8 @@ function drawSuper(){
     for(let k=1;k<=10;k++){const x=puck.x+dx*(PR+20+k*22),y=puck.y+dy*(PR+20+k*22);sq(x,y,k%2?12:8,'#000');sq(x,y,k%2?9:6,blink(8)===!!(k%2)?AURA:'#fff')}
     if(fp){const n=Math.floor(Math.hypot(puck.x-fp.x,puck.y-fp.y)/16);for(let k=1;k<n;k++)sq(fp.x+(puck.x-fp.x)*k/n,fp.y+(puck.y-fp.y)*k/n,4,'#fff')}}
 }
-function drawGoalDeco(){
+function drawGoalDeco(){withSide(lastScorer,drawGoalDeco0)}
+function drawGoalDeco0(){
     for(const i of [0,1])frame(i,()=>{if(i===lastScorer){const RBW=FXT.tr;const sc=1+Math.max(0,goalT-1.8)*2.5;g.save();g.translate(FW/2,MID+190+Math.sin(clock*12)*6);g.scale(sc,sc);ptext('GOAL!!',0,0,64,RBW[Math.floor(clock*16)%6]);if(kawaii())for(let k=0;k<6;k++){const a=clock*3+k*1.047;ks(k%2?'heart':'star',Math.cos(a)*190,Math.sin(a)*60,22,RBW[k])}if(web90())rbar(-150,46,300,8,2);g.restore()}});
 }
 function drawUI(){
@@ -1801,14 +1822,14 @@ function drawUI(){
     [[FW/2-GW/2,FY0],[FW/2+GW/2,FY0],[FW/2-GWB/2,FY1],[FW/2+GWB/2,FY1]].forEach(([x,y],k)=>sq(x,y,14,POST.fl[k]>.1?YEL:'#fff'));
     P.forEach(p=>sq(p.x,p.y,MR*2,COL[p.i]));sq(puck.x,puck.y,PR*2,'#fff');
     P.forEach(p=>{if(p.box.on)sq(p.box.x,p.box.y,52,COL[p.i])});placed.forEach(it=>spr(it.type,it.x,it.y,IT[it.type].r*2,fwd(it.o)))}
-  noFwd=true;trail();noFwd=false;
+  noFwd=true;withSide(puck.lastTouch>=0?puck.lastTouch:-1,trail);noFwd=false; // 軌跡は最後に打った人の STYLE・COLOR
   landMark();
   if(state==='play'&&!puck.boom&&puck.hold>holdLim(puck.side)-3){const rem=holdLim(puck.side)-puck.hold,n=20,lit=Math.ceil(n*rem/3),R=PR+20,warn=rem<1;
     for(let k=0;k<n;k++){const a=-Math.PI/2+k/n*6.2832,x=puck.x+Math.cos(a)*R,y=puck.y+Math.sin(a)*R;if(k<lit){sq(x,y,10,'#000');sq(x,y,7,warn&&blink(10)?'#ff0055':(k%2?'#fff':YEL))}}
     frame(puck.side,()=>{const l=local(puck.side,puck.x,puck.y);ptext(String(Math.ceil(rem)),l.u,l.v-PR-42,22,warn?'#ff0055':'#fff')});}
   slowRays();
   drawSuper();
-  for(const f of fx)if(f.k!=='early')drawFx(f);
+  for(const f of fx)if(f.k!=='early')withSide(f.who,()=>drawFx(f)); // それぞれの持ち主の STYLE・COLOR で描く
   for(const f of fx)if(f.k==='early')drawEarly(f); // パリィの早すぎは打撃のエフェクトより上に描く
   marquee();
   P.forEach(tray);if(BOSS.on)drawBoss();
