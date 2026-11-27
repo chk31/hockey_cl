@@ -468,8 +468,8 @@ function drawScore0(s,t){
   const col=tierHex(s.tier!=null?s.tier:CS.tier),ratio=s.total/RUN.hpMax,R=Math.min(ratio,1.2); // 表示の大きさは HP 比（どれだけ削ったか）で決める
   const n=s.tricks.length,per=5; // トリックの加算（1ラウンド中の動きを全部）
   s.tricks.forEach((tk,j)=>{if(t<.08+j*.07)return;const row=Math.floor(j/per),cn=Math.min(per,n-row*per),k=j%per;ptext(tk.n+' +'+tk.v.toFixed(2),FW/2+(k-(cn-1)/2)*112,MID-216+row*22,10,tk.col,PIX)});
-  const fx=v=>v>=10?fmtN(v):String(Math.round(v*100)/100),ft=v=>v>=10?String(Math.round(v)):v.toFixed(1); // 倍率・T の表記（1.6・2 ／ 1.7 のように小数1桁まで）
-  if(t>.05){const chain=s.mm!==1?fmtN(s.c)+' × '+fx(s.mm)+' × '+ft(s.T):fmtN(s.cEff)+' × '+ft(s.T); // C・T とは書かず数字だけを大きく（×系パークは別の数字として並べる）
+  const ft=v=>v>=10?String(Math.round(v)):v.toFixed(1); // T の表記（1.7 のように小数1桁まで）
+  if(t>.05){const chain=fmtN(s.cEff)+' × '+ft(s.T); // C・T とは書かず数字だけを大きく（×系パークは C に掛けたあとの値で出す）
     let sz=(26+R*30)*(1+Math.max(0,.28-(t-.05))*.8);if(chain.length*sz*.82>540)sz=540/(chain.length*.82); // 長いときは画面に収まるまで縮める
     g.globalAlpha=Math.min(1,(t-.05)*6);ptext(chain,FW/2,MID-124,Math.round(sz),'#ffffff',PIX);g.globalAlpha=1}
   if(t>.35){const p=Math.min(1,(t-.35)*5),sz=Math.round((32+R*46)*(1+Math.max(0,.35-(t-.35))*1.4));
