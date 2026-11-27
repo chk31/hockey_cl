@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.64">
+<meta name="version" content="1.65">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.64'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.65'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 /* 新しい版の確認：起動時とアプリに戻ったときに、キャッシュを使わずに公開中のページの版を読み、新しければタイトル画面で読み込み直す（別のURLにして古いキャッシュを避ける） */
 function verCheck(){try{fetch(location.pathname+'?vc='+Date.now(),{cache:'no-store'}).then(r=>r.text()).then(t=>{const m=t.match(/<meta name="version" content="([0-9.]+)">/);
   if(!m||+m[1]<=+VER)return;const go=()=>{const q=new URLSearchParams(location.search);if(q.get('v')===m[1])return;q.set('v',m[1]);location.replace(location.pathname+'?'+q)};
@@ -46,7 +46,7 @@ function verCheck(){try{fetch(location.pathname+'?vc='+Date.now(),{cache:'no-sto
 setTimeout(verCheck,1500);document.addEventListener('visibilitychange',()=>{if(!document.hidden)verCheck()});
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=1680,WIN=7; // MAXV＝パックの最高速（v1.37 で旧ゲームスピード0.8倍を基準＝100%に。パックの速さの値はすべて旧値の0.8倍）
 /* 差し込み口（ローグライク版 rogue/rogue.js が書き換える。本体だけなら初期値のまま＝今と同じ動き）
-   RULE.win＝勝ちの点数。プレイヤーごと：P[i].mr＝マレットの半径、P[i].hm＝打ったパックの速さの倍率、P[i].boxK＝箱の出る間隔の倍率、P[i].lifeK＝置いた物の持続の倍率、P[i].parK＝パリィ受付の倍率、P[i].iw＝アイテムの出やすさ。WB.t＝上のゴールを左右に広げる幅。P[1].parFrz＝パリィの停止中に CPU を完全に止める */
+   RULE.win＝勝ちの点数。プレイヤーごと：P[i].mr＝マレットの半径、P[i].hm＝打ったパックの速さの倍率、P[i].boxK＝箱の出る間隔の倍率、P[i].lifeK＝置いた物の持続の倍率、P[i].parK＝パリィ受付の倍率、P[i].iw＝アイテムの出やすさ。WB.t＝上のゴールを左右に広げる幅。SLOTS＝アイテム欄の数。置いた物の it.aim＝ジャンプ台が相手のゴールへ向けて飛ばす。P[1].parFrz＝パリィの停止中に CPU を完全に止める */
 const RULE={win:WIN};const mrOf=i=>P[i]&&P[i].mr||MR;
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -320,9 +320,9 @@ function base(){
 function toL(cx,cy){cx-=VX;cy-=VY;const q=rot?{x:FW-(cy-OY)/S,y:(cx-OX)/S}:{x:(cx-OX)/S,y:(cy-OY)/S};return viewFlip?{x:FW-q.x,y:TL-q.y}:q}
 const local=(i,x,y)=>i?{u:FW-x,v:TL-y}:{u:x,v:y};
 function frame(i,fn){g.save();if(i){g.translate(FW,TL);g.rotate(Math.PI)}fn();g.restore()}
-const SLOTS=2,slotX=s=>232+s*120,SLOT_Y=FY1+58; // アイテム欄は2つ
+let SLOTS=2;const slotX=s=>SLOTS>2?214+s*84:232+s*120,SLOT_Y=FY1+58,SLOT_W=()=>SLOTS>2?72:84; // アイテム欄は2つ（差し込み口：ローグ版のパークで3つ。そのときは少し細く詰める）
 let zoneFl=0;const flashSlot=(p,c,t=.5,s=-1)=>{p.fl=t;p.flc=c;p.fls=s};
-function slotAt(u,v){for(let s=0;s<SLOTS;s++)if(Math.abs(u-slotX(s))<46&&Math.abs(v-SLOT_Y)<48)return s;return -1}
+function slotAt(u,v){for(let s=0;s<SLOTS;s++)if(Math.abs(u-slotX(s))<SLOT_W()/2+4&&Math.abs(v-SLOT_Y)<48)return s;return -1}
 
 /* ================= 音（チップチューン） ================= */
 let ac=null;
@@ -1306,6 +1306,7 @@ function sub(h,ms){
         // 進行方向はそのまま、速さだけ少し上げて上に跳ぶ
         const sp0=Math.hypot(puck.vx,puck.vy),sp=Math.min(Math.max(sp0*1.1,380),1760);
         if(sp0>1){puck.vx*=sp/sp0;puck.vy*=sp/sp0}else{puck.vx=0;puck.vy=fwd(it.o)*sp}
+        if(it.aim){const a=boostDir(it.o,puck.x,puck.y);puck.vx=a.dx*sp;puck.vy=a.dy*sp} // 差し込み口：it.aim＝置いた人の相手のゴールへ向けて飛ばす（ローグ版）
         puck.airT=puck.air=1.25;puck.paT=0;it.hit=.35;sfx('jump',puck.x);juice(6,0,.5,.1,YEL);addFx('wave',it.x,it.y,110,'',IT.jump.c);
         {const f=addFx('speed',it.x,it.y,1,'',YEL);if(f){f.nx=0;f.ny=fwd(it.o)}}
       }else if(it.type==='boost'&&Math.abs(dx*-it.dy+dy*it.dx)<r*.55+PR*.4&&Math.abs(dx*it.dx+dy*it.dy)<r){
@@ -1795,9 +1796,9 @@ function tray(p){
     for(let s=0;s<SLOTS;s++){
       const x=slotX(s),dragging=[...drags.values()].some(d=>d.i===p.i&&d.slot===s),k=p.items[s];
       const armed=arm[p.i]&&arm[p.i].slot===s,fl=p.fl>0&&(p.fls<0||p.fls===s)&&blink(12);
-      pbox(x-42,SLOT_Y-42,84,84,fl?p.flc:armed?(blink(6)?YEL:'#fff'):k?(dragging?'#444':COL[p.i]):'#222');
+      pbox(x-SLOT_W()/2,SLOT_Y-42,SLOT_W(),84,fl?p.flc:armed?(blink(6)?YEL:'#fff'):k?(dragging?'#444':COL[p.i]):'#222');
       if(k==='restore'){pbox(x-28,SLOT_Y-28,56,56,blink(4)?'#fff':YEL,'#222');ptext('R',x,SLOT_Y+2,22,'#fff');ptext('RESTORE',x,SLOT_Y+38,7,YEL)}
-      else if(k)spr(k,x,SLOT_Y,56,-1,dragging||!live?.25:1);
+      else if(k)spr(k,x,SLOT_Y,SLOTS>2?50:56,-1,dragging||!live?.25:1);
       if(BOSS.on&&p.i===0&&BOSS.slotX[s]>0){for(let j=0;j<7;j++){sq(x-34+j*11,SLOT_Y-30+((j*37)%60),10,'#ff0055')}ptext(String(Math.ceil(BOSS.slotX[s])),x,SLOT_Y,18,'#ff0055')} // ひび
     }
     const bx=540,by=FY1+58,on=p.box.on;
