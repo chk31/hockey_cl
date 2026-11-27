@@ -13,6 +13,7 @@ const RG={
   noItems:true,                           // ザコ・強敵はアイテム箱を使わない（技の物だけ）
   jumpT:10,chargeT:15,blockCD:15,tele:.8, // 強敵の技：ジャンプ台の間隔・スーパーシュートの間隔・バンパーを置き直すまで・前兆の時間
   blockHP:3,
+  infMe:false,infEnemy:false,             // 開発者メニュー：HP 無限（点を取られても減らない）
   parStun:.3,                             // パリィの時間停止が終わったあと、敵が動けない時間（秒）
   loopK:{sp:.08,re:.07,err:.12,pw:.05,tr:.04}, // エンドレス1周ごとの CPU の上がり方（sp・pw・tr は増える、re・err は減る＝強くなる）
 };
@@ -43,7 +44,7 @@ const PASS={
 const PKEYS=Object.keys(PASS),MAXP=2;
 /* 強敵がランダムに1つ持つパッシブ（プレイヤーと同じ物。アイテム箱・パリィに関わる物は CPU には意味がないので除く。長持ちは JUMPER のジャンプ台に効く） */
 const EPOOL=()=>['hard','big','wide'].concat(RUN.skills.includes('jumper')?['life']:[]);
-const RUN={on:false,stage:0,loop:0,wins:0,pass:[],epass:[],lv:{},elv:{},fav:'jump',skills:[],ov:{},cpuOv:{},double:false,res:null,t:0,cards:[],enemy:null,
+const RUN={sbBack:null,on:false,stage:0,loop:0,wins:0,pass:[],epass:[],lv:{},elv:{},fav:'jump',skills:[],ov:{},cpuOv:{},double:false,res:null,t:0,cards:[],enemy:null,
   sk:{jump:0,charge:0,block:0},tele:[],pfl:{},reached:0};
 let SB_FREEZE=false,SB_SLOW=false;
 
@@ -71,7 +72,9 @@ function startMatch(){RUN.double=false;RUN.tele=[];RUN.sk={jump:RG.jumpT*.6,char
   RULE.win=RG.hp;applyMods();P[0].box.cd=4*(P[0].boxK||1);
   if(st.k!=='boss'&&RG.noItems){const b=P[1].box;b.on=false;b.cd=99;P[1].items=[]} // ザコ・強敵は箱を出さない（毎フレーム 99 に戻す）
   RUN.reached=Math.max(RUN.reached,RUN.stage+1)}
-function newRun(){Object.assign(RUN,{on:true,stage:0,loop:0,wins:0,pass:[],lv:{},skills:[],double:false,reached:0});pickEnemy();toIntro()}
+function newRun(){Object.assign(RUN,{on:true,stage:0,loop:0,wins:0,pass:[],lv:{},skills:[],double:false,reached:0});
+  {const k=PKEYS[Math.floor(Math.random()*PKEYS.length)];RUN.pass=[k];RUN.lv={[k]:1};if(k==='fav')RUN.fav=KEYS.filter(q=>q!=='super')[Math.floor(Math.random()*4)];RUN.startPerk=k} // 最初からランダムに1つ
+  pickEnemy();toIntro()}
 /* 敵の強化：n 個をランダムに（同じ物が出たら重ねがけ） */
 function rollEpass(n){RUN.epass=[];RUN.elv={};const ep=EPOOL();for(let k=0;k<n;k++){const q=ep[Math.floor(Math.random()*ep.length)];if(RUN.epass.includes(q))RUN.elv[q]=(RUN.elv[q]||1)+1;else{RUN.epass.push(q);RUN.elv[q]=1}}}
 function pickEnemy(){if(STAGES[RUN.stage].k==='elite'){const ks=Object.keys(SKILLS),k=ks[Math.floor(Math.random()*ks.length)];RUN.skills=[k];RUN.enemy=SKILLS[k];rollEpass(1+RUN.loop)}
@@ -86,13 +89,16 @@ const CARD=k=>({x:24+k*192,y:MID-190,w:168,h:330});
 function takeCard(k){const key=RUN.cards[k];if(!key)return;
   if(RUN.pass.includes(key))RUN.lv[key]=(RUN.lv[key]||1)+1; // 重ねがけ
   else{if(RUN.pass.length>=MAXP)delete RUN.lv[RUN.pass.shift()];RUN.pass.push(key);RUN.lv[key]=1}if(key==='fav')RUN.fav=RUN.favPick;
-  sfx('pwr');nextStage()}
+  sfx('pwr');
+  if(RUN.sbBack){state=RUN.sbBack;RUN.sbBack=null;if(state==='play'||state==='goal'||state==='pause')applyMods();return} // 開発者メニューから引いた報酬：今の試合に戻る（勝ちにはしない）
+  nextStage()}
 /* 次の戦へ：最初の1周はザコ→強敵→NULL、NULL を倒したらエンドレス（ザコ→強敵→報酬 の繰り返し） */
 function nextStage(){if(RUN.loop===0&&RUN.stage<2)RUN.stage++;else if(RUN.loop>0&&RUN.stage===0)RUN.stage=1;else{RUN.loop++;RUN.stage=0}pickEnemy();toIntro()}
 
 /* ---- 本体の関数を包む ---- */
 const _goal=goal;
 goal=function(scorer){
+  if(RUN.on){if(scorer===1&&RG.infMe){if(BOSS.on)BOSS.lives++;else P[1].score--}if(scorer===0&&RG.infEnemy){if(BOSS.on)BOSS.hp++;else P[0].score--}} // HP 無限：入った点をなかったことに
   if(RUN.on&&scorer===0&&RUN.double){RUN.double=false;RUN.pfl.giri=1.2;
     if(BOSS.on)BOSS.hp=Math.max(1,BOSS.hp-1);else if(P[0].score+1<RULE.win)P[0].score++;else P[0].score=RULE.win-1}
   return _goal(scorer)};
@@ -187,7 +193,8 @@ function overlay(){
       ptext(st.k==='boss'?'ボス・HP3':e?e.d:st.d,FW/2,MID-20,18,'#fff',DOT);
       if(st.k!=='boss'&&RUN.epass.length){RUN.epass.forEach((k,j)=>{passIcon(k,FW/2-90,MID+22+j*44,34,false,RUN.elv[k]||1);ptext('強化：'+PASS[k].n+((RUN.elv[k]||1)>1?' Lv'+RUN.elv[k]:''),FW/2-62,MID+24+j*44,15,PASS[k].c,DOT,'left')})}
       if(RUN.pass.length){ptext('YOU',FW/2,MID+92,10,'#888');RUN.pass.forEach((k,j)=>passIcon(k,FW/2+(j-(RUN.pass.length-1)/2)*56,MID+136,44,false,RUN.lv[k]||1))}
-      if(blink(2))ptext('▶',FW/2,MID+200,20,'#fff',DOT)})}
+      if(RUN.loop===0&&RUN.stage===0&&RUN.startPerk&&RUN.pass.includes(RUN.startPerk))ptext('START：'+PASS[RUN.startPerk].n,FW/2,MID+180,14,PASS[RUN.startPerk].c,DOT);
+      if(blink(2))ptext('▶',FW/2,MID+222,20,'#fff',DOT)})}
   else if(state==='rg_res'){const w=RUN.res==='win';if(RUN.t<resWait()-.6&&w&&BOSS.on)return;dim(.55*Math.min(1,RUN.t*3));
     frame(0,()=>{ptext(w?(BOSS.on?'NULL DEFEATED!':'STAGE CLEAR!'):'GAME OVER',FW/2,MID-40,w?30:36,w?YEL:'#ff0055');
       if(RUN.t>resWait())ptext('▶',FW/2,MID+60,22,'#fff',DOT)})}
@@ -231,7 +238,8 @@ function goStage(s){ensureRun();RUN.stage=s;if(STAGES[s].k==='elite'&&!RUN.skill
 function build(){PN.innerHTML='';REF=[];
   h('RUN');{const w=wrap();btn(w,'ザコ戦',()=>goStage(0));btn(w,'強敵戦',()=>goStage(1));btn(w,'ボス戦',()=>goStage(2));btn(w,'新しいラン',()=>newRun());btn(w,'タイトル',()=>toTitle())}
   {const w=wrap();btn(w,'いま勝ち',()=>{if(!inGame())return;if(BOSS.on){BOSS.hp=1;BOSS.rw=[]}else P[0].score=RULE.win-1;goal(0)});btn(w,'いま負け',()=>{if(!inGame())return;if(BOSS.on)BOSS.lives=1;else P[1].score=RULE.win-1;goal(1)});
-    btn(w,'報酬を引く',()=>{ensureRun();makeCards();state='rg_pick';RUN.t=1})}
+    btn(w,'報酬を引く',()=>{ensureRun();if(state==='rg_pick')return;RUN.sbBack=state;makeCards();state='rg_pick';RUN.t=1})}
+  {const w=wrap();btn(w,'自分の HP 無限',()=>{RG.infMe=!RG.infMe},()=>RG.infMe);btn(w,'相手の HP 無限',()=>{RG.infEnemy=!RG.infEnemy},()=>RG.infEnemy)}
   {const w=wrap();btn(w,'エンドレスへ',()=>{ensureRun();RUN.loop=Math.max(1,RUN.loop);RUN.stage=0;pickEnemy();toIntro()})}
   row('周回 LOOP（0＝最初の1周）',()=>RUN.loop,1,v=>{RUN.loop=clamp(v,0,50);if(RUN.loop>0&&RUN.stage>1)RUN.stage=0});
   row('パリィ後の敵スタン 秒',()=>RG.parStun,.1,v=>RG.parStun=clamp(Math.round(v*10)/10,0,3));
