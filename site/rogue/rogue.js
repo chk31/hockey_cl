@@ -3,13 +3,13 @@
    なので本体の let/const（P・puck・BOSS など）をそのまま読み書きでき、本体の関数（goal / update / pdown / drawAll / parryStart / give）を包み直せる。
    流れ：タイトル → [戦1 ザコ] → 3枚から1枚 → [戦2 強敵] → 3枚から1枚 → [戦3 ボス NULL] → 3枚から1枚 → エンドレス。負けたらその場で終わり。
    エンドレス：[ザコ] → [強敵] → 3枚から1枚 を1周として繰り返す。1周ごとに CPU の数値が少し上がり、敵の強化の数が1つ増える。
-   各試合はお互い HP3（3点取られたら負け）。ボスも HP3・プレイヤーのライフ3。
+   敵は HP 制（ザコ100・強敵180・NULL 600、エンドレスで増加）、プレイヤーはライフ7（敵のゴールで −1）。詳しくは docs/ROGUE_SCORE.md。
    開発者用サンドボックス：左上の SB ボタン。プレイ中でも状態を変えられる。 */
 (function(){
 'use strict';
 const RG={
   hp:3,                                   // 各試合の HP（RULE.win）
-  boss:{hp:3,lives:3,ph2:2,ph3:1},        // ボス：HP3（2で第2段階、1で最終段階）・プレイヤーのライフ3
+  boss:{hp:3,lives:3,ph2:2,ph3:1},        // ボス：本体側の HP は3段階（2で第2段階、1で最終段階。実際の HP は RUN.hp）。lives は本体側の値で、実際のライフは RUN.life
   noItems:true,                           // ザコ・強敵はアイテム箱を使わない（技の物だけ）
   jumpT:10,chargeT:15,blockCD:15,tele:.8, // 強敵の技：ジャンプ台の間隔・スーパーシュートの間隔・バンパーを置き直すまで・前兆の時間
   blockHP:3,
@@ -537,7 +537,7 @@ function overlay(){
     if(!BOSS.on)for(const it of placed)if(it.rgBlock&&!it.dead)for(let j=0;j<it.hp;j++){sq(it.x-12+j*12,it.y-50,10,'#000');sq(it.x-12+j*12,it.y-50,6,'#cc88ff')}
   }
   if(state==='rg_title'){dim(.7);frame(0,()=>{pbox(36,MID-280,FW-72,560,'#ff0055');ptext('AIR HOCKEY',FW/2,MID-222,22,'#999');ptext('ROGUE',FW/2,MID-152,52,YEL);
-      ptext('3戦勝ちぬけ・HP3',FW/2,MID-84,20,'#fff',DOT);
+      ptext('3戦勝ちぬけ・ライフ'+SC.life.max,FW/2,MID-84,20,'#fff',DOT);
       pbox(T_START.x,T_START.y,T_START.w,T_START.h,blink(2)?YEL:'#fff','#1a1a1a');ptext('START',FW/2,T_START.y+T_START.h/2+2,26,'#fff');
       pbox(T_PERK.x,T_PERK.y,T_PERK.w,T_PERK.h,'#ff66ff','#100810');ptext('パーク図鑑',FW/2,T_PERK.y+T_PERK.h/2+2,22,'#fff',DOT);
       pbox(T_BACK.x,T_BACK.y,T_BACK.w,T_BACK.h,'#666');ptext('◀ ふつうのモード',FW/2,T_BACK.y+T_BACK.h/2+2,18,'#ccc',DOT);
@@ -547,7 +547,7 @@ function overlay(){
       ptext(RUN.loop?'ENDLESS  LOOP '+RUN.loop:'STAGE '+(RUN.stage+1)+'/3',FW/2,MID-214,20,RUN.loop?'#ff0055':'#aaa');
       {const v=powOf(curP());ptext('POWER',FW/2,MID-170,13,'#999');ptext(fmtN(v),FW/2,MID-130,36,powCol(v));ptext('HP '+fmtN(hpMaxFor()),FW/2,MID-100,15,'#cccccc',PIX)}
       ptext(st.k==='boss'?'NULL':e?e.n:st.n,FW/2,MID-66,40,st.k==='boss'?'#ff0055':e?e.c:'#fff');
-      ptext(st.k==='boss'?'ボス・HP3':(e?e.d:'')+'',FW/2,MID-16,18,'#fff',DOT);
+      ptext(st.k==='boss'?'ボス・HP '+fmtN(SC.hp.nullHp):(e?e.d:'')+'',FW/2,MID-16,18,'#fff',DOT);
       if(st.k!=='boss')ptext(diffName(curD())+'の動き'+(RUN.E&&RUN.E.quirk?'・'+QUIRK[RUN.E.quirk].n:''),FW/2,e?MID+12:MID-16,18,'#ccc',DOT);
       if(st.k!=='boss'){const n=RUN.epass.length+(UP()?1:0);let j=0;const x0=FW/2-(n-1)*27;
         RUN.epass.forEach(k=>{passIcon(k,x0+j*54,MID+60,42,false,RUN.elv[k]||1);j++});if(UP()){pbox(x0+j*54-21,MID+39,42,42,RUN.enemy.c,'#111');ptext('+'+UP(),x0+j*54,MID+62,16,RUN.enemy.c)}}
