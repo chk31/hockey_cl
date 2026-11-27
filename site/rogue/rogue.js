@@ -75,7 +75,7 @@ const PASS={
   renge:{n:'連撃',d:['触るたびに','Cが重なっていく'],ic:'E',c:'#ff7788',st:1,k:'plus',ap:()=>{}},
   kyuki:{n:'吸気',d:['敵HPの半分以上を','1本で削るとライフ+1'],ic:'Y',c:'#ff88aa',k:'act',ap:()=>{}},
   yoin:{n:'余韻',d:['ゴールのCの一部を','次のパックへ持ち越す'],ic:'M',c:'#ffccff',st:1,rare:1,k:'plus',ap:()=>{}},
-  kaihou:{n:'チャクラ解放',d:['Cの上限がなくなる','紫の先に虹（×1.3）'],ic:'#',c:'#ff66ff',rare:1,k:'plus',ap:()=>{}},
+  kaihou:{n:'チャクラ解放',d:['紫の先に虹','虹はダメージ ×1.3'],ic:'#',c:'#ff66ff',rare:1,k:'plus',ap:()=>{}},
   amp:{n:'増幅',d:['すべてのダメージが','倍になっていく'],ic:'%',c:'#ffee88',st:1,rare:1,k:'mult',ap:()=>{}},
 };
 const PKEYS=Object.keys(PASS),MAXP=99; // パークの数の制限はなし（v1.65〜）
@@ -88,7 +88,7 @@ const FXT_P={hard:n=>'打つ速さ +'+12*n+'%',big:n=>'マレット +'+25*n+'%',
   smashp:n=>'スマッシュのC +'+15*n,jumpm:n=>'ジャンプ台のC +'+12*n+'・空中 +'+(.1*n).toFixed(1),gyaku:n=>'ライフ3以下で C +'+10*n,chiku:n=>'自陣で持つ間 1秒ごと C +'+8*n,
   counter:n=>'パリィのC ×'+mAt(n),shiden:n=>'紫の時 ×'+mAt(n)+'・他は×0.85',bankm:n=>'バンク +'+(.2*n).toFixed(1),postm:n=>'ポスト +'+(.3*n).toFixed(1),sokko:n=>'3往復以内 +'+(.5*n).toFixed(1),
   nagaki:n=>'ラリー上限 +'+(.5*n).toFixed(1)+'・5往復未満×0.85',togi:n=>'白以上で球 +'+(15+10*(n-1))+'%・バンパー貫通',namak:n=>'赤〜橙でゴール→次のC +'+30*n,kasane:n=>'パリィで C を足す（加算 ×'+Math.pow(1.2,n-1).toFixed(2)+'）・打撃は半分',
-  renge:n=>'触るたび C +'+4*n+' ずつ重なる',kyuki:()=>'敵HP半分以上を1本で→ライフ+1',yoin:n=>'C の '+Math.round(Math.min(.75,.3+.15*(n-1))*100)+'% を次のパックへ',kaihou:()=>'C の上限なし・虹で×1.3',amp:n=>'全ダメージ ×'+mAt(n),
+  renge:n=>'触るたび C +'+4*n+' ずつ重なる',kyuki:()=>'敵HP半分以上を1本で→ライフ+1',yoin:n=>'C の '+Math.round(Math.min(.75,.3+.15*(n-1))*100)+'% を次のパックへ',kaihou:()=>'紫の先に虹・虹で×1.3',amp:n=>'全ダメージ ×'+mAt(n),
   jump:n=>'出やすさ '+RG.jumpW[Math.min(n,RG.jumpW.length-1)]+'（ほかは5）・敵の方へ飛ぶ',homing:n=>'曲がる強さ ×'+n+(n>=2?'・跳ね返っても'+RG.homeT+'秒':''),slot:()=>'アイテム欄 3つ'};
 const FXT_E={hard:n=>'打つ速さ +'+12*n+'%',big:n=>'マレット +'+25*n+'%',wide:n=>'自分のゴール 左右に +'+Math.min(20*n,WSEG-RC),life:n=>'ジャンプ台 ×'+(1+.6*n).toFixed(1)};
 const RUN={shots:[],breakT:0,dur:0,durMax:300,durFlash:0,life:7,hp:100,hpMax:100,hpShow:100,hpFlash:0,sc:null,scT:0,pops:[],carry:0,nextC:0,maxDmg:0,expl:false,home:0,listMode:'run',listPg:0,sbBack:null,dOv:null,pOv:null,E:null,items:[],listBack:null,on:false,stage:0,loop:0,wins:0,pass:[],epass:[],lv:{},elv:{},fav:'jump',skills:[],ov:{},cpuOv:{},double:false,res:null,t:0,cards:[],enemy:null,
@@ -155,7 +155,7 @@ const diffName=d=>d<.2?'とてもよわい':d<.5?'よわい':d<.8?'ややよわ�
    C は自分のマレット・自分のアイテムに当たるたびに上書き（敵が触っても残る）。数値はすべて SC（開発者メニューから変えられる）。 */
 const SC={
   c:{w:10,m:20,s:30,f:40,smash:60,parry:80,sup:100,boost:40,jump:35,bump:25}, // C の基本値：打撃 弱/中/強/速・スマッシュ・パリィ・スーパー・加速床・ジャンプ台・バンパー
-  cap:150,rainbow:160,tier:[0,15,25,40,60,80,100], // C の上限／虹の境目／段階（赤 橙 黄 緑 青 白 紫）の境目
+  rainbow:160,tier:[0,15,25,40,60,80,100], // 虹の境目／段階（赤 橙 黄 緑 青 白 紫）の境目（C に上限はない）
   tr:{bank:.2,bank2:.4,post:.5,air:.3,long:.2,    // トリック値の加算：バンク（2回以上）・ポスト・空中・ロング
     stun:.1,wall:.01,item:.05,parry:.05,smash:.05, // 1ラウンド（サーブからゴールまで）の回数×：敵がスタンした・壁に当たった・アイテムを使った・パリィした・スマッシュした
     expl:.3,stunNow:.3,brk:.4},                    // 4秒ルールの爆発／敵がスタン中のゴール／敵が GUARD BREAK 中のゴール（ブレイク中はスタン中と重ならない）
@@ -197,7 +197,7 @@ function setC(kind){const C=SC.c;let c=0;const used=[];
   if(isMallet(kind)&&pl('renge')){CS.streak++;c+=4*pl('renge')*CS.streak;used.push('renge')}
   if(CS.pend>0){c+=CS.pend;CS.pend=0;used.push('yoin')}
   if(RUN.nextC>0){c+=RUN.nextC;RUN.nextC=0;used.push('namak')}
-  applyC(Math.min(pl('kaihou')?1e9:SC.cap,c),kind,used)}
+  applyC(c,kind,used)}
 const mKind=sp=>sp>SMASH?'smash':sp<300?'w':sp<700?'m':sp<1100?'s':'f';
 function calcDamage(expl){const T0=SC.tr;let c=CS.c>0?CS.c:SC.c.w;if(expl)c=Math.max(c,SC.explodeMin);
   const d={c,cEff:c,tricks:[],sum:0,T:1,rm:1,mm:1,mnote:[],perks:new Set(CS.pk),total:0,expl:!!expl,rally,kind:expl?'expl':(CS.c>0?CS.kind:'w'),tier:CS.tier};
@@ -357,7 +357,7 @@ update=function(dt){
     const sp=Math.hypot(puck.vx,puck.vy),a=Math.atan2(puck.vy,puck.vx),b=Math.atan2(FY0-30-puck.y,FW/2-puck.x);let df=b-a;while(df>Math.PI)df-=2*Math.PI;while(df<-Math.PI)df+=2*Math.PI;
     const mx=RG.homing*(RUN.lv.homing||1)*dt*ts*SPD,t=a+clamp(df,-mx,mx);if(sp>1&&puck.y>FY0+40){puck.vx=Math.cos(t)*sp;puck.vy=Math.sin(t)*sp}}
   if(RUN.on&&state==='play'&&live&&PAR.who<0&&SUP.aim<0&&pl('chiku')&&CS.c>0&&puck.y>MID&&!puck.boom){ // 蓄気：自陣で持つ間、1秒ごとに C がたまる
-    CS.hold+=dt;if(CS.hold>=1){CS.hold-=1;const old=CS.tier;CS.c=Math.min(pl('kaihou')?1e9:SC.cap,CS.c+8*pl('chiku'));CS.tier=tierOf(CS.c);CS.pk.add('chiku');if(CS.tier>old)pop('C '+fmtN(CS.c),puck.x,puck.y-52,tierHex(CS.tier),22,1)}}
+    CS.hold+=dt;if(CS.hold>=1){CS.hold-=1;const old=CS.tier;CS.c=CS.c+8*pl('chiku');CS.tier=tierOf(CS.c);CS.pk.add('chiku');if(CS.tier>old)pop('C '+fmtN(CS.c),puck.x,puck.y-52,tierHex(CS.tier),22,1)}}
   else if(puck.y<=MID)CS.hold=0;
   if(RUN.on&&par0===0&&lt0!==1&&puck.lastTouch===1&&RUN.pass.includes('tsuki'))stunE(.3*(RUN.lv.tsuki||1),'tsuki'); // つらぬき：パリィ球に当たった敵
   for(const k in RUN.pfl)RUN.pfl[k]=Math.max(0,RUN.pfl[k]-dt);
@@ -619,7 +619,6 @@ function build(){PN.innerHTML='';REF=[];CUR=PN;
   {const w=wrap();btn(w,'C=紫',()=>{applyC(SC.tier[6],'w')});btn(w,'C=白',()=>{applyC(SC.tier[5],'w')});btn(w,'C=0',()=>{CS.c=0;CS.tier=0});btn(w,'ラリー +5',()=>{rally+=5});
     btn(w,'バンク印',()=>{CS.tr.bank=1});btn(w,'ポスト印',()=>{CS.tr.post=1});btn(w,'ロング印',()=>{CS.tr.long=1})}
   {const L={w:'打撃 弱',m:'打撃 中',s:'打撃 強',f:'打撃 速',smash:'スマッシュ',parry:'パリィ',sup:'スーパー',boost:'加速床',jump:'ジャンプ台',bump:'バンパー'};for(const k in SC.c)row('C '+L[k],()=>SC.c[k],5,v=>SC.c[k]=clamp(v,1,999))}
-  row('C の上限',()=>SC.cap,10,v=>SC.cap=clamp(v,20,9999));
   {const L={bank:'バンク',bank2:'バンク2回〜',post:'ポスト',air:'空中',long:'ロング',stun:'敵スタン/回',wall:'壁に当たる/回',item:'アイテム使用/回',parry:'パリィ/回',smash:'スマッシュ/回',expl:'4秒爆発',stunNow:'敵スタン中のゴール',brk:'GUARD BREAK 中のゴール'};for(const k in SC.tr)row('T '+L[k],()=>SC.tr[k],.01,v=>SC.tr[k]=clamp(Math.round(v*100)/100,0,5))}
   row('今のラウンド：スタン／壁／アイテム',()=>CR.stun+'/'+CR.wall+'/'+CR.item,0,()=>{});
   row('ラリー倍率の伸び／往復',()=>SC.ral.step,.01,v=>SC.ral.step=clamp(Math.round(v*100)/100,0,1));row('ラリー倍率の上限',()=>SC.ral.max,.5,v=>SC.ral.max=clamp(v,1,20));
