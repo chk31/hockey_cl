@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.67">
+<meta name="version" content="1.68">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.67'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.68'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 /* 新しい版の確認：起動時とアプリに戻ったときに、キャッシュを使わずに公開中のページの版を読み、新しければタイトル画面で読み込み直す（別のURLにして古いキャッシュを避ける） */
 function verCheck(){try{fetch(location.pathname+'?vc='+Date.now(),{cache:'no-store'}).then(r=>r.text()).then(t=>{const m=t.match(/<meta name="version" content="([0-9.]+)">/);
   if(!m||+m[1]<=+VER)return;const go=()=>{const q=new URLSearchParams(location.search);if(q.get('v')===m[1])return;q.set('v',m[1]);location.replace(location.pathname+'?'+q)};
@@ -47,7 +47,8 @@ setTimeout(verCheck,1500);document.addEventListener('visibilitychange',()=>{if(!
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=1680,WIN=7; // MAXV＝パックの最高速（v1.37 で旧ゲームスピード0.8倍を基準＝100%に。パックの速さの値はすべて旧値の0.8倍）
 /* 差し込み口（ローグライク版 rogue/rogue.js が書き換える。本体だけなら初期値のまま＝今と同じ動き）
    RULE.win＝勝ちの点数。プレイヤーごと：P[i].mr＝マレットの半径、P[i].hm＝打ったパックの速さの倍率、P[i].boxK＝箱の出る間隔の倍率、P[i].lifeK＝置いた物の持続の倍率、P[i].parK＝パリィ受付の倍率、P[i].iw＝アイテムの出やすさ。WB.t＝上のゴールを左右に広げる幅。SLOTS＝アイテム欄の数。置いた物の it.aim＝ジャンプ台が相手のゴールへ向けて飛ばす。P[1].parFrz＝パリィの停止中に CPU を完全に止める */
-const RULE={win:WIN};const mrOf=i=>P[i]&&P[i].mr||MR;
+const RULE={win:WIN,ev:null}; // ev＝差し込み口：ジャンプ台・加速床にパックが触れたとき ev('jump'|'boost', 置物) を呼ぶ（ローグ版の得点計算用）
+const mrOf=i=>P[i]&&P[i].mr||MR;
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
 const IT={jump:{n:'ジャンプ台',c:'#ffaa00',r:46},boost:{n:'加速床',c:'#00ffff',r:70},bumper:{n:'バンパー',c:'#aa55ff',r:34},mud:{n:'ぬかるみ',c:'#55ff55',r:72},super:{n:'スーパーシュート',c:'#33ccff',r:40}};
@@ -1307,7 +1308,7 @@ function sub(h,ms){
         const sp0=Math.hypot(puck.vx,puck.vy),sp=Math.min(Math.max(sp0*1.1,380),1760);
         if(sp0>1){puck.vx*=sp/sp0;puck.vy*=sp/sp0}else{puck.vx=0;puck.vy=fwd(it.o)*sp}
         if(it.aim){const a=boostDir(it.o,puck.x,puck.y);puck.vx=a.dx*sp;puck.vy=a.dy*sp} // 差し込み口：it.aim＝置いた人の相手のゴールへ向けて飛ばす（ローグ版）
-        puck.airT=puck.air=1.25;puck.paT=0;it.hit=.35;sfx('jump',puck.x);juice(6,0,.5,.1,YEL);addFx('wave',it.x,it.y,110,'',IT.jump.c);
+        puck.airT=puck.air=1.25;puck.paT=0;it.hit=.35;if(RULE.ev)RULE.ev('jump',it);sfx('jump',puck.x);juice(6,0,.5,.1,YEL);addFx('wave',it.x,it.y,110,'',IT.jump.c);
         {const f=addFx('speed',it.x,it.y,1,'',YEL);if(f){f.nx=0;f.ny=fwd(it.o)}}
       }else if(it.type==='boost'&&Math.abs(dx*-it.dy+dy*it.dx)<r*.55+PR*.4&&Math.abs(dx*it.dx+dy*it.dy)<r){
         if(puck.sup>=0){breakItem(it);continue} // スーパーシュート：加速床は効果なしで壊れる
@@ -1315,7 +1316,7 @@ function sub(h,ms){
         const across=dx*-it.dy+dy*it.dx,sp=Math.min(Math.max(Math.hypot(puck.vx,puck.vy)*1.25,1280),2080);
         puck.x-=-it.dy*across*.35;puck.y-=it.dx*across*.35;
         puck.vx=it.dx*sp;puck.vy=it.dy*sp;puck.boostT=.875;puck.paT=0;if(it.boss)setTimeout(()=>breakItem(it),60); // ボスの加速床：通ったらすぐ壊れるif(BOSS.on&&!it.boss)puck.lastTouch=-1; // ボス戦：加速床を通った球はだれの球でもない（パリィできる）
-        if(it.hit<=0){sfx('boost',puck.x);addFx('speed',puck.x,puck.y,1);juice(8,.04,1,.1,'#00ffff')}it.hit=.15;
+        if(it.hit<=0){if(RULE.ev)RULE.ev('boost',it);sfx('boost',puck.x);addFx('speed',puck.x,puck.y,1);juice(8,.04,1,.1,'#00ffff')}it.hit=.15;
       }else if(it.type==='bumper'){bumperHit(it,r)
       }else if(it.type==='mud'&&Math.hypot(dx,dy)<r){if(puck.sup>=0){mud=true;breakItem(it);continue} // スーパーシュート：減速してから壊れる
         puck.paT=0;const k=Math.exp(-4*hp);puck.vx*=k;puck.vy*=k;const sp=Math.hypot(puck.vx,puck.vy);if(sp>304){puck.vx*=304/sp;puck.vy*=304/sp}mud=true}

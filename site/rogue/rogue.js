@@ -17,8 +17,8 @@ const RG={
   parStun:.3,                             // パリィの時間停止が終わったあと、敵が動けない時間（秒）
   /* 戦力ポイント：試合ごとの予算 B を「基礎の動き d・強化パーク・技・技の強化」に割り振って敵を組み立てる（docs/ROGUE.md）。
      d は CPU の動きの強さ（0＝よわい、1＝ふつう、2＝つよい の数値を混ぜる）。強さの表示＝pow.base×pow.r^P（P＝使った戦力ポイント、上限 bud.max で 10000） */
-  cost:{d:10,hard:3,big:3,wide:4,life:1,jumper:3,blocker:4,charger:5,up:1}, // d は 1.0 あたり
-  cap:{hard:4,big:3,wide:3,life:3,up:3},                                     // 敵のパークの Lv・技の強化の上限
+  cost:{hp:2,d:10,hard:3,big:3,wide:4,life:1,jumper:3,blocker:4,charger:5,up:1}, // d は 1.0 あたり
+  cap:{hard:4,big:3,wide:3,life:3,up:3,hpUp:5},                                     // 敵のパークの Lv・技の強化の上限
   bud:{z:4,e0:6,e:5,max:60},          // 予算：ザコ＝z×周回、強敵＝e0＋e×周回、上限 max
   pow:{base:50,r:1.0923},             // 強さの表示（P=0 で 50、P=60 で 10000）
   nullP:25,                           // ボス NULL の戦力（固定）
@@ -48,24 +48,47 @@ const PASS={
   life:{n:'長持ち',d:['置いた物が','60% 長く残る'],ic:'L',c:'#00ffff',st:1,ap:(p,n)=>{p.lifeK=1+.6*n}},
   fav:{n:'ひいき',d:['','がよく出る（3倍）'],ic:'F',c:'#ff88ff',ap:()=>{}}, // 出やすさは applyMods でまとめて計算
   gosen:{n:'後の先',d:['パリィに成功すると','アイテム箱がすぐ出る'],ic:'P',c:'#3399ff',ap:()=>{}},
-  giri:{n:'ギリギリ王',d:['パリィの受付が半分','成功すると次の得点が2点'],ic:'G',c:'#ff0055',ap:p=>{p.parK=.5}},
+  giri:{n:'ギリギリ王',d:['パリィの受付が半分','成功すると次のダメージ×2'],ic:'G',c:'#ff0055',ap:p=>{p.parK=.5}},
   zan:{n:'残心',d:['パリィ後の敵のスタンが','0.2秒長くなる'],ic:'Z',c:'#aaaaff',st:1,ap:()=>{}},
   tsuki:{n:'つらぬき',d:['パリィで返した球に','当たった敵が0.3秒スタン'],ic:'T',c:'#ff8800',st:1,ap:()=>{}},
   jump:{n:'ジャンプ台',d:['ジャンプ台が出るようになる','重ねるほど出やすい'],ic:'J',c:IT.jump.c,st:1,ap:()=>{}}, // ローグ版のジャンプ台はこのパークを取るまで出ない
   // rare＝レアパーク：ふつうの報酬では1枚ごとに RG.rareP の確率で出る。ボスのあとはレア1つか、ランダム2つのどちらか
   homing:{n:'パリィホーミング',d:['パリィで返した球が','相手のゴールへ曲がる','Lv2〜 跳ね返っても'],ic:'@',c:'#ff66ff',st:1,rare:1,ap:()=>{}},
   slot:{n:'アイテム枠 +1',d:['アイテム欄が','3つになる'],ic:'+',c:'#ffffff',rare:1,ap:()=>{}},
+  // ---- チャクラ（得点）系：効果は得点計算の中で参照する（k＝plus：＋C／mult：×倍率／trick：トリック／act：発動。報酬の1枚は plus か mult から出す）----
+  smashp:{n:'スマッシュ職人',d:['スマッシュの','Cが上がる'],ic:'S',c:'#ff3366',st:1,k:'plus',ap:()=>{}},
+  jumpm:{n:'跳躍の極意',d:['ジャンプ台のCと','空中ゴールが強い'],ic:'U',c:'#ffaa00',st:1,k:'plus',ap:()=>{}},
+  gyaku:{n:'逆境の気',d:['ライフ3以下の','とき C が上がる'],ic:'X',c:'#ff6644',st:1,k:'plus',ap:()=>{}},
+  chiku:{n:'蓄気',d:['自陣で持つ間','Cがたまる'],ic:'C',c:'#55ddaa',st:1,k:'plus',ap:()=>{}},
+  counter:{n:'反撃の型',d:['パリィのCが','大きく伸びる'],ic:'R',c:'#3399ff',st:1,k:'mult',ap:()=>{}},
+  shiden:{n:'紫電',d:['Cが紫のとき','ダメージ大・他は×0.85'],ic:'D',c:'#c050ff',st:1,k:'mult',ap:()=>{}},
+  bankm:{n:'バンク名人',d:['バンクゴールの','トリックが増える'],ic:'K',c:'#00ffff',st:1,k:'trick',ap:()=>{}},
+  postm:{n:'ポスト狙い',d:['ポストゴールの','トリックが増える'],ic:'O',c:'#ffffff',st:1,k:'trick',ap:()=>{}},
+  sokko:{n:'速攻',d:['3往復以内の','ゴールにトリック'],ic:'V',c:'#ffee44',st:1,k:'trick',ap:()=>{}},
+  nagaki:{n:'長期戦',d:['ラリー倍率の上限↑','5往復未満は×0.85'],ic:'N',c:'#88aaff',st:1,k:'trick',ap:()=>{}},
+  togi:{n:'研ぎ澄まし',d:['Cが白以上で球が速く','敵のバンパーを貫く'],ic:'I',c:'#dddddd',st:1,k:'act',ap:()=>{}},
+  namak:{n:'なまくら返し',d:['赤〜橙でゴールすると','次の打撃のCが上がる'],ic:'Q',c:'#ff9a1a',st:1,k:'plus',ap:()=>{}},
+  kasane:{n:'気の重ね',d:['パリィでCを足す','ふつうの打撃は半分'],ic:'A',c:'#66ccff',st:1,k:'plus',ap:()=>{}},
+  renge:{n:'連撃',d:['触るたびに','Cが重なっていく'],ic:'E',c:'#ff7788',st:1,k:'plus',ap:()=>{}},
+  kyuki:{n:'吸気',d:['敵HPの半分以上を','1本で削るとライフ+1'],ic:'Y',c:'#ff88aa',k:'act',ap:()=>{}},
+  yoin:{n:'余韻',d:['ゴールのCの一部を','次のパックへ持ち越す'],ic:'M',c:'#ffccff',st:1,rare:1,k:'plus',ap:()=>{}},
+  kaihou:{n:'チャクラ解放',d:['Cの上限がなくなる','紫の先に虹（×1.3）'],ic:'#',c:'#ff66ff',rare:1,k:'plus',ap:()=>{}},
+  amp:{n:'増幅',d:['すべてのダメージが','倍になっていく'],ic:'%',c:'#ffee88',st:1,rare:1,k:'mult',ap:()=>{}},
 };
 const PKEYS=Object.keys(PASS),MAXP=99; // パークの数の制限はなし（v1.65〜）
 const NKEYS=PKEYS.filter(k=>!PASS[k].rare),RKEYS=PKEYS.filter(k=>PASS[k].rare);
 const favItems=()=>KEYS.filter(q=>q!=='super'&&(q!=='jump'||RUN.pass.includes('jump'))); // ひいきで選べるアイテム（ジャンプ台は解禁後）
 /* 一覧用：Lv を含めた今の効き */
 const FXT_P={hard:n=>'打つ速さ +'+12*n+'%',big:n=>'マレット +'+25*n+'%',wide:n=>'相手のゴール 左右に +'+Math.min(20*n,WSEG-RC),box:n=>'箱の間隔 ×'+Math.pow(.65,n).toFixed(2),
-  life:n=>'置いた物 ×'+(1+.6*n).toFixed(1),fav:()=>IT[RUN.fav].n+' が3倍出やすい',gosen:()=>'パリィ成功で箱がすぐ出る',giri:()=>'受付半分・成功で次の得点2点',
+  life:n=>'置いた物 ×'+(1+.6*n).toFixed(1),fav:()=>IT[RUN.fav].n+' が3倍出やすい',gosen:()=>'パリィ成功で箱がすぐ出る',giri:()=>'受付半分・成功で次のダメージ ×2',
   zan:n=>'パリィ後の敵スタン +'+(.2*n).toFixed(1)+'秒',tsuki:n=>'パリィ球に当たった敵 '+(.3*n).toFixed(1)+'秒スタン',
+  smashp:n=>'スマッシュのC +'+15*n,jumpm:n=>'ジャンプ台のC +'+12*n+'・空中 +'+(.1*n).toFixed(1),gyaku:n=>'ライフ3以下で C +'+10*n,chiku:n=>'自陣で持つ間 1秒ごと C +'+8*n,
+  counter:n=>'パリィのC ×'+mAt(n),shiden:n=>'紫の時 ×'+mAt(n)+'・他は×0.85',bankm:n=>'バンク +'+(.2*n).toFixed(1),postm:n=>'ポスト +'+(.3*n).toFixed(1),sokko:n=>'3往復以内 +'+(.5*n).toFixed(1),
+  nagaki:n=>'ラリー上限 +'+(.5*n).toFixed(1)+'・5往復未満×0.85',togi:n=>'白以上で球 +'+(15+10*(n-1))+'%・バンパー貫通',namak:n=>'赤〜橙でゴール→次のC +'+30*n,kasane:n=>'パリィで C を足す（加算 ×'+Math.pow(1.2,n-1).toFixed(2)+'）・打撃は半分',
+  renge:n=>'触るたび C +'+4*n+' ずつ重なる',kyuki:()=>'敵HP半分以上を1本で→ライフ+1',yoin:n=>'C の '+Math.round(Math.min(.75,.3+.15*(n-1))*100)+'% を次のパックへ',kaihou:()=>'C の上限なし・虹で×1.3',amp:n=>'全ダメージ ×'+mAt(n),
   jump:n=>'出やすさ '+RG.jumpW[Math.min(n,RG.jumpW.length-1)]+'（ほかは5）・敵の方へ飛ぶ',homing:n=>'曲がる強さ ×'+n+(n>=2?'・跳ね返っても'+RG.homeT+'秒':''),slot:()=>'アイテム欄 3つ'};
 const FXT_E={hard:n=>'打つ速さ +'+12*n+'%',big:n=>'マレット +'+25*n+'%',wide:n=>'自分のゴール 左右に +'+Math.min(20*n,WSEG-RC),life:n=>'ジャンプ台 ×'+(1+.6*n).toFixed(1)};
-const RUN={home:0,listMode:'run',listPg:0,sbBack:null,dOv:null,pOv:null,E:null,items:[],listBack:null,on:false,stage:0,loop:0,wins:0,pass:[],epass:[],lv:{},elv:{},fav:'jump',skills:[],ov:{},cpuOv:{},double:false,res:null,t:0,cards:[],enemy:null,
+const RUN={life:7,hp:100,hpMax:100,hpShow:100,hpFlash:0,sc:null,scT:0,pops:[],carry:0,nextC:0,maxDmg:0,expl:false,home:0,listMode:'run',listPg:0,sbBack:null,dOv:null,pOv:null,E:null,items:[],listBack:null,on:false,stage:0,loop:0,wins:0,pass:[],epass:[],lv:{},elv:{},fav:'jump',skills:[],ov:{},cpuOv:{},double:false,res:null,t:0,cards:[],enemy:null,
   sk:{jump:0,charge:0,block:0},tele:[],pfl:{},reached:0};
 let SB_FREEZE=false,SB_SLOW=false;
 
@@ -90,10 +113,12 @@ function stageLv(){const L=cpuAt(curD());if(RUN.E&&RUN.E.quirk)QUIRK[RUN.E.quirk
 /* ---- 戦力ポイントで敵を組み立てる ---- */
 function budget(){const k=STAGES[RUN.stage].k,B=RUN.pOv!=null?RUN.pOv:k==='zako'?RG.bud.z*RUN.loop:RG.bud.e0+RG.bud.e*RUN.loop;return Math.max(0,Math.min(RG.bud.max,B))}
 const pick=a=>a[Math.floor(Math.random()*a.length)];
-function buildEnemy(){const k=STAGES[RUN.stage].k,C=RG.cost,E={kind:k,B:budget(),d:0,quirk:null,skill:null,up:0,pass:[],lv:{}};let R=E.B;
+function buildEnemy(){const k=STAGES[RUN.stage].k,C=RG.cost,E={kind:k,B:budget(),d:0,quirk:null,skill:null,up:0,hpUp:0,pass:[],lv:{}};let R=E.B;
   const add=q=>{if(!E.lv[q]){E.pass.push(q);E.lv[q]=0}E.lv[q]++;R-=C[q]};
   if(k==='zako'){ // ザコ：70% 以上を基礎の動きに。残りはステータス系パーク1種類だけ（重ねがけ可）。技なし
-    const q=pick(['hard','big','wide']);let pb=Math.floor(E.B*(1-RG.zakoD)+1e-9);while(pb>=C[q]&&(E.lv[q]||0)<RG.cap[q]){add(q);pb-=C[q]}
+    const q=pick(['hard','big','wide']);let pb=Math.floor(E.B*(1-RG.zakoD)+1e-9);
+    E.hpUp=Math.min(RG.cap.hpUp,Math.floor(pb*.5/C.hp));R-=E.hpUp*C.hp;pb-=E.hpUp*C.hp; // ザコは HP 寄り：パーク予算の半分は HP を買う
+    while(pb>=C[q]&&(E.lv[q]||0)<RG.cap[q]){add(q);pb-=C[q]}
     E.d=Math.min(2,R/10);R-=E.d*10;if(!(RUN.loop===0&&E.B===0))E.quirk=pick(Object.keys(QUIRK))}
   else{ // 強敵：技を1つ必ず → 2周目から技の強化 → 残りの 40〜60% を基礎の動き → 残りは技と相性のよいパーク
     E.skill=pick(Object.keys(SKILLS));R-=C[E.skill];
@@ -101,12 +126,13 @@ function buildEnemy(){const k=STAGES[RUN.stage].k,C=RG.cost,E={kind:k,B:budget()
     const sh=rnd(RG.eliteD[0],RG.eliteD[1]);E.d=Math.min(2,Math.max(0,R*sh)/10);R-=E.d*10;
     const pool=['hard','big','wide'].concat(E.skill==='jumper'?['life']:[]),pref=SKILL_PREF[E.skill];
     for(let n=0;n<60&&R>=1;n++){const cand=pool.filter(q=>C[q]<=R&&(E.lv[q]||0)<RG.cap[q]);if(!cand.length)break;const pc=cand.filter(q=>pref.includes(q));add(pc.length&&Math.random()<.6?pick(pc):pick(cand))}
+    E.hpUp=Math.min(RG.cap.hpUp,Math.floor(Math.max(0,R)*.3/C.hp));R-=E.hpUp*C.hp; // 強敵は技寄り：余りの3割で HP を買う
     E.d=Math.min(2,E.d+Math.max(0,R)/10);E.quirk=SKILL_QUIRK[E.skill]}
   E.d=Math.round(E.d*100)/100;return E}
 /* 今の相手の戦力ポイント P（開発者メニューで変えた分も入る）と強さの表示 */
 function curP(){if(STAGES[RUN.stage].k==='boss')return RG.nullP;const C=RG.cost;let P=curD()*C.d;for(const q of RUN.epass)P+=C[q]*(RUN.elv[q]||1);for(const q of RUN.skills)P+=C[q];return P+(RUN.E?RUN.E.up*C.up:0)}
-const powOf=P=>P>=RG.bud.max?10000:Math.min(10000,Math.max(50,Math.round(RG.pow.base*Math.pow(RG.pow.r,P)/10)*10));
-const powCol=v=>v<100?'#fff':v<500?YEL:v<2000?'#ffaa00':(blink(4)?'#ff0055':'#ff6688');
+const powOf=P=>{const v=RG.pow.base*Math.pow(RG.pow.r,P)*hpMaxFor()/SC.hp.zako;return v<1000?Math.max(50,Math.round(v/10)*10):v}; // 強さ＝戦力ポイントの指数 × HP（上限なし）
+const powCol=v=>v<100?'#fff':v<500?YEL:v<2000?'#ffaa00':v<20000?(blink(4)?'#ff0055':'#ff6688'):(blink(8)?'#ff00ff':'#ff66ff');
 const UP=()=>RUN.E?RUN.E.up:0;
 function cpuAt(d){const a=d<=1?LV[0]:LV[1],b=d<=1?LV[1]:LV[2],t=d<=1?d:d-1,L={n:'R'};
   for(const k of ['sp','re','err','cd','pw','tr'])L[k]=a[k]+(b[k]-a[k])*t;
@@ -114,15 +140,95 @@ function cpuAt(d){const a=d<=1?LV[0]:LV[1],b=d<=1?LV[1]:LV[2],t=d<=1?d:d-1,L={n:
   return L}
 const diffName=d=>d<.34?'よわい':d<.67?'ややよわい':d<1.2?'ふつう':d<1.6?'ややつよい':'つよい';
 
+/* ================= 得点システム（チャクラ）：docs/ROGUE_SCORE.md =================
+   ダメージ ＝ C ×（1＋トリック値の合計）× ラリー倍率 ×（×系パークの積）。敵は HP、自分はライフ制。
+   C は自分のマレット・自分のアイテムに当たるたびに上書き（敵が触っても残る）。数値はすべて SC（開発者メニューから変えられる）。 */
+const SC={
+  c:{w:10,m:20,s:30,f:40,smash:60,parry:80,sup:100,boost:40,jump:35,bump:25}, // C の基本値（研ぎの前）：打撃 弱/中/強/速・スマッシュ・パリィ・スーパー・加速床・ジャンプ台・バンパー
+  cap:150,rainbow:160,tier:[0,15,25,40,60,80,100], // C の上限／虹の境目／段階（赤 橙 黄 緑 青 白 紫）の境目（どれも研ぎで周回ごとに伸びる）
+  tr:{bank:.2,bank2:.4,post:.5,air:.3,long:.2},    // トリック値：バンク（2回以上）・ポスト・空中・ロング
+  ral:{step:.1,max:3},minPct:.08,explodeMin:20,    // ラリー倍率の伸び・上限／最低ダメージ（敵の最大 HP の割合）／4秒ルール爆発の最低 C
+  hp:{zako:100,elite:1.8,nullHp:600,g1:1.35,g2:2.2,gN:5}, // 敵の HP：ザコ・強敵の倍率・NULL／周回ごとの伸び（5周目まで g1、そのあと g2）
+  whet:{a:1.08,b:1.25,n:5},                        // 研ぎ（C の基本値の伸び）：5周目まで a、そのあと b
+  life:{max:7,heal:2},hpStep:.2,                   // 自分のライフの上限・報酬の回復／HP を買うと 1 段ごとに +20%
+};
+const TCOL=['#ff3344','#ff9a1a','#ffe014','#44e060','#3a9bff','#ffffff','#c050ff'],TNAME=['赤','橙','黄','緑','青','白','紫','虹'];
+const MULT=[1,1.3,1.6,2,3,4.5]; // ×加速型パークの Lv ごとの倍率（Lv6 以降は ×1.5 ずつ）
+const mAt=n=>n<=0?1:n<MULT.length?MULT[n]:MULT[MULT.length-1]*Math.pow(1.5,n-(MULT.length-1));
+const pl=k=>RUN.pass.includes(k)?(RUN.lv[k]||1):0; // パークの Lv（持っていなければ 0）
+const whet=()=>{const w=SC.whet,L=RUN.loop||0;return Math.pow(w.a,Math.min(L,w.n))*Math.pow(w.b,Math.max(0,L-w.n))};
+const tierOf=c=>{const x=c/whet();let t=0;for(let i=1;i<SC.tier.length;i++)if(x>=SC.tier[i])t=i;if(pl('kaihou')&&x>=SC.rainbow)t=7;return t};
+const tierHex=t=>t>=7?'#ff66ff':TCOL[clamp(t,0,6)];
+const tierCol=t=>t>=7?'hsl('+Math.floor(clock*240%360)+',100%,60%)':TCOL[clamp(t,0,6)]; // 虹は色相が回る（3D 用）
+const CS={c:0,tier:0,tr:{bank:0,post:0,air:0,long:0},streak:0,hold:0,pend:0};
+const isMallet=k=>k==='smash'||k==='w'||k==='m'||k==='s'||k==='f';
+const UNITS=['','K','M','B','T','aa','ab','ac','ad','ae','af','ag','ah','ai','aj','ak','al','am','an'];
+function fmtN(n){n=Math.max(0,+n||0);if(n<1000)return String(Math.round(n));let u=0;while(n>=999.5&&u<UNITS.length-1){n/=1000;u++}return (n>=100?n.toFixed(0):n>=10?n.toFixed(1):n.toFixed(2))+UNITS[u]}
+function resetCS(){CS.c=RUN.carry>0?RUN.carry:0;CS.pend=RUN.carry>0?RUN.carry:0;RUN.carry=0;CS.tier=CS.c>0?tierOf(CS.c):0;CS.tr={bank:0,post:0,air:0,long:0};CS.streak=0;CS.hold=0}
+function pop(txt,x,y,col,size,life=1.1,vy=-40){RUN.pops.push({txt,x,y,col,size,life,t:0,vy})}
+function applyC(c,kind){const old=CS.tier;CS.c=c;CS.tier=tierOf(c);
+  CS.tr={bank:0,post:0,air:0,long:(isMallet(kind)&&puck.y>MID+60)?1:0}; // C を上書きしたら印は付け直し
+  const col=tierHex(CS.tier);addFx('wave',puck.x,puck.y,52,'',col); // 上書きのたびに小さな輪（数字は段階が上がったときだけ）
+  if(CS.tier>old){pop('C '+fmtN(c),puck.x,puck.y-52,col,CS.tier>=6?30:22,1.0);beep(500+CS.tier*140,.05,'square',.05)}
+  if(isMallet(kind)&&CS.tier>=5&&pl('togi')){const k=1.15+.1*(pl('togi')-1);puck.vx*=k;puck.vy*=k} // 研ぎ澄まし：白以上でパックが速くなる
+}
+function setC(kind){const W=whet(),C=SC.c;let c=0;
+  if(kind==='smash')c=C.smash+15*pl('smashp');
+  else if(isMallet(kind)){c=C[kind];if(pl('kasane'))c*=.5}
+  else if(kind==='parry')c=C.parry*mAt(pl('counter'));
+  else if(kind==='sup')c=C.sup;
+  else if(kind==='boost')c=C.boost;
+  else if(kind==='jump')c=C.jump+12*pl('jumpm');
+  else if(kind==='bump')c=C.bump;
+  c*=W;
+  if(kind==='parry'&&pl('kasane'))c=CS.c+c*Math.pow(1.2,pl('kasane')-1); // 気の重ね：パリィは C を置きかえず足す
+  if(pl('gyaku')&&RUN.life<=3)c+=10*pl('gyaku')*W;
+  if(isMallet(kind)&&pl('renge')){CS.streak++;c+=4*pl('renge')*CS.streak*W}
+  if(CS.pend>0){c+=CS.pend;CS.pend=0}
+  if(RUN.nextC>0){c+=RUN.nextC;RUN.nextC=0}
+  applyC(Math.min(pl('kaihou')?1e9:SC.cap*W,c),kind)}
+const mKind=sp=>sp>SMASH?'smash':sp<300?'w':sp<700?'m':sp<1100?'s':'f';
+function calcDamage(expl){const W=whet();const c=CS.c>0?CS.c:SC.c.w*W;
+  const d={c,tricks:[],tm:1,rm:1,mm:1,mnote:[],total:0,expl:!!expl,rally:rally};
+  if(expl){d.c=Math.max(c,SC.explodeMin*W);d.total=d.c}
+  else{let sum=0;const add=(n,v,col)=>{sum+=v;d.tricks.push({n,v,col})},T=SC.tr;
+    if(CS.tr.bank>=1)add('BANK',(CS.tr.bank>=2?T.bank2:T.bank)+.2*pl('bankm'),'#00ffff');
+    if(CS.tr.post)add('POST',T.post+.3*pl('postm'),'#ffffff');
+    if(puck.air>0)add('AIR',T.air+.1*pl('jumpm'),'#ffaa00');
+    if(CS.tr.long)add('LONG',T.long,'#55ff55');
+    if(pl('sokko')&&rally<=3)add('SOKKO',.5*pl('sokko'),'#ffee44');
+    d.tm=1+sum;d.rm=Math.min(1+SC.ral.step*rally,SC.ral.max+.5*pl('nagaki'));
+    let mm=1;const pm=(n,v)=>{mm*=v;d.mnote.push({n,v})};
+    if(pl('amp'))pm('AMP',mAt(pl('amp')));
+    if(pl('shiden'))pm('紫電',CS.tier>=6?mAt(pl('shiden')):.85);
+    if(pl('kaihou')&&CS.tier>=7)pm('虹',1.3);
+    if(pl('nagaki')&&rally<5)pm('長期戦',.85);
+    if(RUN.double)pm('×2',2);
+    d.mm=mm;d.total=d.c*d.tm*d.rm*mm}
+  const mn=RUN.hpMax*SC.minPct;if(d.total<mn){d.total=mn;d.min=true}
+  d.total=Math.round(d.total);return d}
+function postGoal(d,expl){const r=d.total/RUN.hpMax,col=tierHex(CS.tier);RUN.hpFlash=1;
+  if(r>=.5||d.kill){juice(26,.14,1.6,.9,'#ffffff');addFx('wave',FW/2,FY0,320,'','#ffffff')}else if(r>=.2)juice(14,.07,.9,.45,col);
+  if(r>=.2)sfx('smash',1500,FW/2);if(r>=.5)sfx('boom',FW/2);
+  for(const m of [1e3,1e6,1e9,1e12])if(d.total>=m&&(RUN.maxDmg||0)<m){pop(fmtN(m)+' BREAK!',FW/2,MID-220,'#ffee44',34,2,-10);juice(20,.1,1.2,.8,'#ffee44')} // 桁を初めて超えた
+  RUN.maxDmg=Math.max(RUN.maxDmg||0,d.total);
+  if(pl('kyuki')&&d.total>=RUN.hpMax*.5)RUN.life=Math.min(SC.life.max,RUN.life+1);
+  if(pl('namak')&&CS.tier<=1)RUN.nextC=30*pl('namak')*whet();
+  if(pl('yoin'))RUN.carry=CS.c*Math.min(.75,.3+.15*(pl('yoin')-1));
+  if(d.kill&&!BOSS.on)addFx('nulldie',P[1].x,P[1].y,1,'','#3dff7a')}
+/* 敵の HP：ザコ 100・強敵 ×1.8（5周目まで ×1.35／周、そのあと ×2.2／周）。HP を買った分は +20% ずつ */
+function hpMaxFor(){const k=STAGES[RUN.stage].k;if(k==='boss')return SC.hp.nullHp;const H=SC.hp,L=RUN.loop||0,gr=Math.pow(H.g1,Math.min(L,H.gN))*Math.pow(H.g2,Math.max(0,L-H.gN));
+  return Math.round(H.zako*(k==='elite'?H.elite:1)*gr*(1+SC.hpStep*(RUN.E?RUN.E.hpUp||0:0)))}
+
 /* ---- 試合を始める ---- */
-function startMatch(){RUN.double=false;RUN.tele=[];RUN.sk={jump:RG.jumpT*.6,charge:RG.chargeT*.6,block:1.5};
+function startMatch(){RUN.double=false;RUN.tele=[];RUN.sc=null;RUN.pops=[];RUN.expl=false;if(!(RUN.life>0))RUN.life=SC.life.max;RUN.sk={jump:RG.jumpT*.6,charge:RG.chargeT*.6,block:1.5};
   const st=STAGES[RUN.stage];
   if(st.k==='boss'){BOSS.on=false;bossStart();Object.assign(LV[3],RUN.cpuOv)}
   else{bossOff();LV[4]=stageLv();start('cpu',4)}
-  RULE.win=RG.hp;applyMods();P[0].box.cd=4*(P[0].boxK||1);P[0].items=(RUN.items||[]).slice(0,SLOTS); // アイテム欄は前の試合から持ち越し
+  RULE.win=RG.hp;RUN.hpMax=hpMaxFor();RUN.hp=RUN.hpMax;RUN.hpShow=RUN.hpMax;applyMods();resetCS();P[0].box.cd=4*(P[0].boxK||1);P[0].items=(RUN.items||[]).slice(0,SLOTS); // アイテム欄は前の試合から持ち越し
   if(st.k!=='boss'&&RG.noItems){const b=P[1].box;b.on=false;b.cd=99;P[1].items=[]} // ザコ・強敵は箱を出さない（毎フレーム 99 に戻す）
   RUN.reached=Math.max(RUN.reached,RUN.stage+1)}
-function newRun(){Object.assign(RUN,{on:true,stage:0,loop:0,wins:0,items:[],pass:[],lv:{},skills:[],double:false,reached:0});
+function newRun(){Object.assign(RUN,{on:true,stage:0,loop:0,wins:0,life:SC.life.max,carry:0,nextC:0,maxDmg:0,items:[],pass:[],lv:{},skills:[],double:false,reached:0});
   {const k=pick(NKEYS);RUN.pass=[k];RUN.lv={[k]:1};if(k==='fav')RUN.fav=pick(favItems());RUN.startPerk=k} // 最初からランダムに1つ
   pickEnemy();toIntro()}
 /* 次の相手を組み立てる（ボスは固定） */
@@ -137,12 +243,16 @@ const canTake=k=>!RUN.pass.includes(k)||PASS[k].st;
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function makeCards(boss){RUN.favPick=pick(favItems());const np=shuffle(NKEYS.filter(canTake)),rp=shuffle(RKEYS.filter(canTake));
   if(boss&&rp.length&&np.length>=2){RUN.cards=[{k:rp[0],rare:1},{pair:[np[0],np[1]]}];RUN.bossPick=true;return}
-  RUN.bossPick=false;RUN.cards=[];for(let j=0;j<3;j++){if(rp.length&&Math.random()<RG.rareP)RUN.cards.push({k:rp.shift(),rare:1});else if(np.length)RUN.cards.push({k:np.shift()})}}
+  RUN.bossPick=false;RUN.cards=[];for(let j=0;j<3;j++){if(rp.length&&Math.random()<RG.rareP)RUN.cards.push({k:rp.shift(),rare:1});else if(np.length)RUN.cards.push({k:np.shift()})}
+  // 報酬の1枚は必ず「＋C」か「×倍率」のパークから出す（インフレについていくため）
+  const sc=k=>PASS[k].k==='plus'||PASS[k].k==='mult';
+  if(!RUN.cards.some(c=>sc(c.k))){const pool=shuffle(NKEYS.filter(k=>canTake(k)&&sc(k)&&!RUN.cards.some(c=>c.k===k)));if(pool.length){const at=RUN.cards.map(c=>c.rare?0:1).lastIndexOf(1);RUN.cards[at<0?RUN.cards.length-1:at]={k:pool[0]}}}}
 function givePerk(key){if(RUN.pass.includes(key))RUN.lv[key]=(RUN.lv[key]||1)+1;else{RUN.pass.push(key);RUN.lv[key]=1}if(key==='fav')RUN.fav=RUN.favPick}
 const CARD=k=>RUN.bossPick?{x:60+k*250,y:MID-190,w:230,h:330}:{x:24+k*192,y:MID-190,w:168,h:330};
 function takeCard(k){const c=RUN.cards[k];if(!c)return;
   if(c.pair)c.pair.forEach(givePerk);else givePerk(c.k);
   sfx('pwr');
+  if(!RUN.sbBack)RUN.life=RUN.bossPick?SC.life.max:Math.min(SC.life.max,RUN.life+SC.life.heal); // 報酬でライフ +2（NULL のあとは全回復）
   if(RUN.sbBack){state=RUN.sbBack;RUN.sbBack=null;if(state==='play'||state==='goal'||state==='pause')applyMods();return} // 開発者メニューから引いた報酬：今の試合に戻る（勝ちにはしない）
   nextStage()}
 /* 次の戦へ：最初の1周はザコ→強敵→NULL、NULL を倒したらエンドレス（ザコ→強敵→報酬 の繰り返し） */
@@ -151,17 +261,54 @@ function nextStage(){if(RUN.loop===0&&RUN.stage<2)RUN.stage++;else if(RUN.loop>0
 /* ---- 本体の関数を包む ---- */
 const _goal=goal;
 goal=function(scorer){
-  if(RUN.on){if(scorer===1&&RG.infMe){if(BOSS.on)BOSS.lives++;else P[1].score--}if(scorer===0&&RG.infEnemy){if(BOSS.on)BOSS.hp++;else P[0].score--}} // HP 無限：入った点をなかったことに
-  if(RUN.on&&scorer===0&&RUN.double){RUN.double=false;RUN.pfl.giri=1.2;
-    if(BOSS.on)BOSS.hp=Math.max(1,BOSS.hp-1);else if(P[0].score+1<RULE.win)P[0].score++;else P[0].score=RULE.win-1}
+  if(!RUN.on)return _goal(scorer);
+  const expl=RUN.expl;RUN.expl=false;RUN.sc=null;RUN.scT=0;
+  if(scorer===1){ // 敵のゴール：ライフ −1（いつも1）
+    if(!RG.infMe)RUN.life--;const dead=RUN.life<=0;RUN.sc={life:true};CS.streak=0;
+    if(BOSS.on)BOSS.lives=dead?1:9;else P[1].score=dead?RULE.win-1:0;
+    const r=_goal(scorer);if(BOSS.on&&!dead)BOSS.lives=2;return r}
+  const d=calcDamage(expl);RUN.double=false;
+  if(!RG.infEnemy)RUN.hp=Math.max(0,RUN.hp-d.total);
+  const kill=RUN.hp<=0&&!RG.infEnemy;d.kill=kill;
+  if(BOSS.on){const tier=kill?0:clamp(Math.ceil(RUN.hp/RUN.hpMax*3),1,3);BOSS.hp=kill?1:tier+1} // NULL は HP 600 を 3 段階（66%・33%）に分けて、本体のボス処理に渡す
+  else P[0].score=kill?RULE.win-1:0;
+  RUN.sc=d;postGoal(d,expl);
   return _goal(scorer)};
+const _explode=explode;
+explode=function(side){RUN.expl=RUN.on&&side===1;return _explode(side)};
+/* 打撃・壁：C の更新とトリックの記録 */
+const _hit=hit;
+hit=function(x,y,sp,txt,who=-1,wn=null){
+  if(RUN.on&&state==='play'){
+    if(wn){if(sp>=300&&CS.c>0&&CS.tr.bank<2){CS.tr.bank++;CS.tr.long=0;addFx('wave',x,y,46,'','#00ffff')}} // バンク：自分の打撃のあとに壁へ当たった
+    else if(who===0){if(sp>=80)setC(mKind(sp))}
+    else if(who===1){CS.tr.long=0;CS.streak=0}}
+  return _hit(x,y,sp,txt,who,wn)};
+const _postHit=postHit;
+postHit=function(x,y,v){if(RUN.on&&state==='play'&&v>=100&&CS.c>0&&!CS.tr.post){CS.tr.post=1;CS.tr.long=0;addFx('wave',x,y,50,'','#ffffff')}return _postHit(x,y,v)};
+const _bumperHit=bumperHit;
+bumperHit=function(it,r){
+  if(RUN.on&&it.rgBlock&&pl('togi')&&CS.tier>=5&&CS.c>0){breakItem(it);return 0} // 研ぎ澄まし：白以上の C は敵のバンパーを貫く
+  const v=_bumperHit(it,r);if(RUN.on&&v&&it.o===0&&state==='play')setC('bump');return v};
+const _superFire=superFire;
+superFire=function(){const i=SUP.aim,r=_superFire();if(RUN.on&&i===0)setC('sup');return r};
+const _serve=serve;
+serve=function(side){const r=_serve(side);if(RUN.on)resetCS();return r};
+RULE.ev=(k,it)=>{if(RUN.on&&it&&it.o===0&&state==='play'){if(k==='jump')setC('jump');else if(k==='boost')setC('boost')}}; // 自分の加速床・ジャンプ台
+/* パックを C の色に（3D の本体）。パックの枠は黄色で固定、一番上の 2D レイヤーで必ず描く（drawPuckRing） */
+const _render3D=render3D;let puckTinted=false;
+render3D=function(){
+  if(meshes.puckMats){const on=RUN.on&&(state==='play'||state==='goal'||state==='pause');
+    if(on){const c=tierCol(CS.c>0?CS.tier:0);meshes.puckMats[0].color.set(c);meshes.puckMats[1].color.set(c);puckTinted=true}
+    else if(puckTinted){meshes.puckMats[0].color.set(PK.b);meshes.puckMats[1].color.set('#ffffff');puckTinted=false}}
+  return _render3D()};
 const _parryStart=parryStart;
 parryStart=function(i,nx,ny){const r=_parryStart(i,nx,ny);
   if(RUN.on&&i===0){if(RUN.pass.includes('gosen')&&!P[0].box.on){spawnBox(P[0]);RUN.pfl.gosen=1.2}if(RUN.pass.includes('giri')){RUN.double=true;RUN.pfl.giri=1.2}}
   return r};
 /* パリィ：時間停止が終わったあと、敵は少し動けない（残心で長く） */
 const _parryFire=parryFire;
-parryFire=function(dx,dy){const i=PAR.who,r=_parryFire(dx,dy);if(RUN.on&&i===0)RUN.home=RG.homeT;if(RUN.on&&i===0)stunE(RG.parStun+.2*(RUN.pass.includes('zan')?(RUN.lv.zan||1):0),RUN.pass.includes('zan')?'zan':null);return r};
+parryFire=function(dx,dy){const i=PAR.who,r=_parryFire(dx,dy);if(RUN.on&&i===0)setC('parry');if(RUN.on&&i===0)RUN.home=RG.homeT;if(RUN.on&&i===0)stunE(RG.parStun+.2*(RUN.pass.includes('zan')?(RUN.lv.zan||1):0),RUN.pass.includes('zan')?'zan':null);return r};
 function stunE(t,pk){const b=P[1];b.stun=Math.max(b.stun,t);addFx('impact',b.x,b.y,60,'',AURA);if(pk)RUN.pfl[pk]=Math.max(RUN.pfl[pk]||0,.6)}
 /* ジャンプ台は置いた人の相手のゴールへ向けて飛ばす（本体の it.aim） */
 const _place=place;
@@ -171,6 +318,7 @@ give=function(p){if(RUN.on&&p.i===0&&RUN.pass.includes('fav'))RUN.pfl.fav=.8;ret
 
 const _update=update;
 update=function(dt){
+  for(const o of RUN.pops)o.t+=dt;RUN.pops=RUN.pops.filter(o=>o.t<o.life);RUN.hpFlash=Math.max(0,RUN.hpFlash-dt*2.5);if(RUN.sc)RUN.scT+=dt;
   if(state==='title'){toTitle()} // 本体のタイトル（中断→QUIT など）はローグライクのタイトルへ
   if(state.startsWith('rg_')){clock+=dt;flash=Math.max(0,flash-dt*4);for(const f of fx)f.t+=dt;for(let k=fx.length-1;k>=0;k--)if(fx[k].t>fx[k].life)fx.splice(k,1);
     RUN.t+=dt;if(state==='rg_intro'&&RUN.t>2.2)startMatch();return}
@@ -181,6 +329,9 @@ update=function(dt){
   if(RUN.on&&state==='play'&&(puck.par===0||(RUN.home>0&&(RUN.lv.homing||1)>=2))&&puck.air===0&&PAR.who<0&&SUP.aim<0&&RUN.pass.includes('homing')){ // パリィホーミング：相手のゴールへ少しずつ向きを変える（速さはそのまま）
     const sp=Math.hypot(puck.vx,puck.vy),a=Math.atan2(puck.vy,puck.vx),b=Math.atan2(FY0-30-puck.y,FW/2-puck.x);let df=b-a;while(df>Math.PI)df-=2*Math.PI;while(df<-Math.PI)df+=2*Math.PI;
     const mx=RG.homing*(RUN.lv.homing||1)*dt*ts*SPD,t=a+clamp(df,-mx,mx);if(sp>1&&puck.y>FY0+40){puck.vx=Math.cos(t)*sp;puck.vy=Math.sin(t)*sp}}
+  if(RUN.on&&state==='play'&&live&&PAR.who<0&&SUP.aim<0&&pl('chiku')&&CS.c>0&&puck.y>MID&&!puck.boom){ // 蓄気：自陣で持つ間、1秒ごとに C がたまる
+    CS.hold+=dt;if(CS.hold>=1){CS.hold-=1;const old=CS.tier;CS.c=Math.min(pl('kaihou')?1e9:SC.cap*whet(),CS.c+8*pl('chiku')*whet());CS.tier=tierOf(CS.c);if(CS.tier>old)pop('C '+fmtN(CS.c),puck.x,puck.y-52,tierHex(CS.tier),22,1)}}
+  else if(puck.y<=MID)CS.hold=0;
   if(RUN.on&&par0===0&&lt0!==1&&puck.lastTouch===1&&RUN.pass.includes('tsuki'))stunE(.3*(RUN.lv.tsuki||1),'tsuki'); // つらぬき：パリィ球に当たった敵
   for(const k in RUN.pfl)RUN.pfl[k]=Math.max(0,RUN.pfl[k]-dt);
   if(state==='over'&&RUN.on){const win=BOSS.on?BOSS.result==='win':P[0].score>=RULE.win;RUN.res=win?'win':'lose';state='rg_res';RUN.t=0;if(win)RUN.wins++;RUN.items=P[0].items.filter(k=>k!=='restore');
@@ -245,7 +396,7 @@ function listEntries(){const E=[];
     E.push({t:'head',s:'NORMAL '+NKEYS.length,c:'#fff'});NKEYS.forEach(row);E.push({t:'head',s:'RARE '+RKEYS.length,c:'#ff66ff'});RKEYS.forEach(row);return E}
   E.push({t:'head',s:'YOU  '+RUN.pass.length,c:COL[0]});if(!RUN.pass.length)E.push({t:'none'});
   RUN.pass.forEach(k=>{const n=RUN.lv[k]||1,P0=PASS[k];E.push({t:'perk',k,n,name:P0.n+(P0.st?'  Lv'+n:'')+(P0.rare?'  RARE':''),c:pcol(k),txt:FXT_P[k]?FXT_P[k](n):''})});
-  if(RUN.on&&STAGES[RUN.stage].k!=='boss'){const C=RG.cost,v=powOf(curP());E.push({t:'head',s:'ENEMY  POWER '+v,c:powCol(v)});
+  if(RUN.on&&STAGES[RUN.stage].k!=='boss'){const C=RG.cost,v=powOf(curP());E.push({t:'head',s:'ENEMY  POWER '+fmtN(v)+'  HP '+fmtN(hpMaxFor()),c:powCol(v)});
     E.push({t:'text',s:'動き d'+curD().toFixed(2)+(RUN.E&&RUN.E.quirk?'・'+QUIRK[RUN.E.quirk].n:'')+'　P '+(Math.round(curP()*10)/10)});
     if(RUN.skills.length)E.push({t:'text',s:'技 '+RUN.skills.map(q=>SKILLS[q].n).join(',')+(UP()?'（強化 +'+UP()+'）':'')});
     RUN.epass.forEach(k=>{const n=RUN.elv[k]||1;E.push({t:'perk',k,n,name:PASS[k].n+'  Lv'+n,c:PASS[k].c,txt:FXT_E[k]?FXT_E[k](n):''})})}
@@ -269,18 +420,62 @@ function listTap(l){const n=listPages().length;
   if(inR(l,LB_NEXT)&&RUN.listPg<n-1){RUN.listPg++;beep(880,.03);return}
   if(inR(l,LB_CLOSE)||l.v<LB_TOP-40||l.v>LB_BOT){state=RUN.listBack||'rg_title';RUN.listBack=null;beep(660,.04)}}
 
+/* ---- 得点システムの表示 ---- */
+const MATCH_ST=()=>state==='play'||state==='goal'||state==='pause';
+/* パックの枠：黄色固定・一番上のレイヤー。トリックの印は枠のまわりの小さな四角（バンク＝水色・ポスト＝白・空中＝橙・ロング＝緑） */
+function drawPuckRing(){if(!RUN.on||!MATCH_ST()||puck.boom)return;const x=puck.x,y=puck.y,R=PR+5;
+  g.save();g.lineWidth=8;g.strokeStyle='#000';g.beginPath();g.arc(x,y,R,0,7);g.stroke();g.lineWidth=4;g.strokeStyle=YEL;g.stroke();
+  const pips=[];if(CS.tr.bank)pips.push('#00ffff');if(CS.tr.post)pips.push('#ffffff');if(puck.air>0)pips.push('#ffaa00');if(CS.tr.long)pips.push('#55ff55');
+  pips.forEach((c,j)=>{const a=-Math.PI/2+j*Math.PI/2+clock*1.5,px=x+Math.cos(a)*(R+10),py=y+Math.sin(a)*(R+10);sq(px,py,12,'#000');sq(px,py,8,c)});
+  g.restore()}
+function drawPops(){for(const o of RUN.pops){const k=o.t/o.life,sc=1+Math.max(0,.5-o.t*3),a=k>.7?1-(k-.7)/.3:1;g.globalAlpha=Math.max(0,a);
+    ptext(o.txt,o.x,o.y+o.vy*o.t,Math.round(o.size*sc),o.col,PIX);g.globalAlpha=1}}
+/* ゴールの瞬間：「C × トリック × ラリー」→「＝ ダメージ」 */
+function drawScore(){const s=RUN.sc;if(!s||state!=='goal')return;const t=RUN.scT;
+  const oy=BOSS.on&&BOSS.rwT>0?-170:0;g.save();g.translate(0,oy); // NULL の「書き換え」の表示と重なるときは上へ
+  try{drawScore0(s,t)}finally{g.restore()}}
+function drawScore0(s,t){
+  if(s.life){const a=Math.min(1,t*4);g.globalAlpha=a;ptext('LIFE −1',FW/2,MID-60,34,'#ff3355',PIX);g.globalAlpha=1;return}
+  const col=tierHex(CS.tier),ratio=s.total/RUN.hpMax;
+  s.tricks.forEach((tk,j)=>{if(t<.1+j*.12)return;ptext(tk.n+' +'+tk.v.toFixed(1),FW/2+(j-(s.tricks.length-1)/2)*150,MID-170,13,tk.col,PIX)});
+  if(t>.05){let line=fmtN(s.c)+' × '+(s.expl?'1':s.tm.toFixed(2))+' × '+(s.expl?'1':s.rm.toFixed(1));if(s.mm!==1)line+=' × '+(s.mm<10?s.mm.toFixed(2):fmtN(s.mm));
+    ptext(line,FW/2,MID-122,s.mm!==1?22:26,'#ffffff',PIX);
+    if(s.mnote.length)ptext(s.mnote.map(m=>m.n).join(' / '),FW/2,MID-92,12,'#c9a0ff',DOT)}
+  if(t>.35){const p=Math.min(1,(t-.35)*5),sz=Math.round((34+Math.min(26,Math.log10(Math.max(10,s.total))*5))*(1+Math.max(0,.35-(t-.35))*1.4));
+    g.globalAlpha=p;ptext('＝ '+fmtN(s.total),FW/2,MID-34,sz,ratio>=.5?(blink(8)?'#ffffff':col):col,PIX);g.globalAlpha=1;
+    if(s.min)ptext('MIN',FW/2+170,MID-34,12,'#ff8888',PIX);
+    if(s.kill&&t>.8)ptext('K.O.',FW/2,MID+34,40,blink(6)?'#ffffff':'#ff0055',PIX)}}
+/* 敵の名前・HP・強さ（上の帯。画面の上から見て正しい向き） */
+function drawTop(){if(!RUN.on||!(MATCH_ST()||state==='rg_res'))return;const boss=BOSS.on,e=RUN.enemy,st=STAGES[RUN.stage];
+  RUN.hpShow+=(RUN.hp-RUN.hpShow)*.12;if(Math.abs(RUN.hpShow-RUN.hp)<.5)RUN.hpShow=RUN.hp;
+  if(!boss){g.fillStyle='#000';g.fillRect(-40,-40,FW+80,FY0-26+40);
+    ptext(e?e.n:st.n,28,36,e&&e.n.length>6?20:24,e?e.c:'#ffffff',PIX,'left');
+    ptext((RUN.loop?'LOOP '+RUN.loop+'・':'')+diffName(curD())+(RUN.E&&RUN.E.quirk?'・'+QUIRK[RUN.E.quirk].n:''),28,76,14,'#bbbbbb',DOT,'left');
+    RUN.epass.slice(0,6).forEach((k,j)=>passIcon(k,250+j*34,84,28,false,RUN.elv[k]||1));
+    {const v=powOf(curP());ptext('PWR '+fmtN(v),FW-24,86,13,powCol(v),PIX,'right')}}
+  else{g.fillStyle='#000';g.fillRect(228,14,FW-228+40,50)}
+  const x=236,y=22,w=FW-236-24,h=34,r=RUN.hpMax>0?clamp(RUN.hp/RUN.hpMax,0,1):0,rs=RUN.hpMax>0?clamp(RUN.hpShow/RUN.hpMax,0,1):0;
+  g.fillStyle='#000';g.fillRect(x-4,y-4,w+8,h+8);g.fillStyle='#444';g.fillRect(x-2,y-2,w+4,h+4);g.fillStyle='#150008';g.fillRect(x,y,w,h);
+  g.fillStyle='#ffffff';g.fillRect(x,y,Math.round(w*rs),h); // 減った分は白く残って縮む
+  g.fillStyle=r>.5?'#ff2255':r>.25?'#ff8800':(blink(6)?'#ffee00':'#ff8800');g.fillRect(x,y,Math.round(w*r),h);
+  g.fillStyle='rgba(255,255,255,.25)';g.fillRect(x,y,Math.round(w*r),6);
+  if(boss){g.fillStyle='#000';for(const f of [1/3,2/3])g.fillRect(x+Math.round(w*f)-1,y,3,h)} // NULL の段階の境目（66%・33%）
+  if(RUN.hpFlash>0){g.fillStyle='rgba(255,255,255,'+(RUN.hpFlash*.5)+')';g.fillRect(x,y,w,h)}
+  ptext(fmtN(RUN.hp)+' / '+fmtN(RUN.hpMax),x+w/2,y+h/2+2,15,'#ffffff',PIX)}
+/* 自分のトレイ：ライフ（7）・C の砥石ゲージ */
+function drawMyTray(){if(!RUN.on||!(MATCH_ST()||state==='rg_res'))return;
+  frame(0,()=>{g.fillStyle='#000';g.fillRect(14,FY1+26,102,86);
+    for(let k=0;k<SC.life.max;k++){const x=28+(k%4)*24,y=FY1+42+Math.floor(k/4)*24,on=k<RUN.life;sq(x,y,21,'#000');sq(x,y,15,on?COL[0]:'#333');if(on)sq(x-3,y-3,5,'#fff')}
+    const t=CS.c>0?CS.tier:0,col=tierHex(t);ptext('C '+(CS.c>0?fmtN(CS.c):'-'),16,FY1+86,12,CS.c>0?col:'#777',PIX,'left');
+    for(let i=0;i<7;i++){g.fillStyle='#000';g.fillRect(15+i*14,FY1+94,14,14);g.fillStyle=(CS.c>0&&i<=t)?TCOL[i]:'#333';g.fillRect(16+i*14,FY1+95,12,12)}
+    if(CS.tier>=7){g.fillStyle=tierCol(7);g.fillRect(16,FY1+95,96,3)}})}
+
 function overlay(){
-  const inMatch=state==='play'||state==='goal'||state==='pause';
-  // トレイの点数の所は HP の表示にする（試合の外では隠す。ボス戦は本体がライフを出す）
-  if(!BOSS.on&&RG.noItems&&!P[1].box.on&&P[1].box.cd>=90)frame(1,()=>{g.fillStyle='#000';g.fillRect(512,FY1+18,60,74)}); // 箱を使わない敵：箱の欄を隠す（試合の外でも）
-  if(!BOSS.on)for(const i of [0,1])frame(i,()=>{g.fillStyle='#000';g.fillRect(14,FY1+30,100,60);if(RUN.on&&(inMatch||state==='rg_res')){const hp=RULE.win-P[1-i].score;for(let k=0;k<RULE.win;k++)heart(34+k*30,FY1+56,k<hp,COL[i])}});
+  const inMatch=MATCH_ST();
   if(RUN.on&&(inMatch||state==='rg_res')){
+    drawTop();drawMyTray();
     frame(0,()=>{const n=RUN.pass.length,cols=n<=2?2:n<=6?3:4,s=cols===2?38:cols===3?26:19,gp=s+3,rows=Math.ceil(Math.min(n,12)/cols),y0=FY1+56-(rows-1)*gp/2; // 自分のパーク（多いときは小さく並べる。12個まで）
       RUN.pass.slice(0,12).forEach((k,j)=>passIcon(k,426+s/2+(j%cols)*gp,y0+Math.floor(j/cols)*gp,s,(RUN.pfl[k]||0)>0,RUN.lv[k]||1));if(n>12)ptext('+'+(n-12),500,FY1+100,12,'#fff');if(RUN.double){ptext('×2',412,FY1+100,16,blink(6)?YEL:'#ff0055')}});
-    frame(1,()=>{if(!BOSS.on){if(RG.noItems&&!P[1].box.on&&P[1].box.cd>=90){g.fillStyle='#000';g.fillRect(512,FY1+18,60,74)} // 箱を使わない敵：箱の欄を隠して強化を出す
-      RUN.epass.slice(0,3).forEach((k,j)=>passIcon(k,554-j*31,FY1+52,28,false,RUN.elv[k]||1));
-      ptext(RUN.loop?'LOOP '+RUN.loop:(RUN.stage+1)+'/3',430,FY1+32,11,RUN.loop?'#ff0055':'#999');ptext(RUN.enemy?RUN.enemy.n:STAGES[RUN.stage].n,430,FY1+54,13,RUN.enemy?RUN.enemy.c:'#bbb')}
-      {const v=powOf(curP());ptext('PWR '+v,BOSS.on?120:430,BOSS.on?FY1+100:FY1+78,12,powCol(v))}});
     // 強敵の技の前兆・耐久
     for(const t of RUN.tele){const a=1-t.t/RG.tele;if(t.k==='charger'){const b=P[1];for(let j=0;j<14;j++){const an=j/14*6.2832+clock*6;sq(b.x+Math.cos(an)*(mrOf(1)+16),b.y+Math.sin(an)*(mrOf(1)+16),8,blink(10)?'#fff':AURA)}}
       else{const c=t.k==='jumper'?SKILLS.jumper.c:IT.bumper.c,R=60-a*20;for(let j=0;j<16;j++){const an=j/16*6.2832;if(blink(8))sq(t.x+Math.cos(an)*R,t.y+Math.sin(an)*R,8,c)}}
@@ -297,7 +492,7 @@ function overlay(){
       ptext('v'+VER,FW-50,MID+262,10,'#777',PIX,'right')})}
   else if(state==='rg_intro'){dim(.78);const st=STAGES[RUN.stage],e=RUN.enemy;frame(0,()=>{
       ptext(RUN.loop?'ENDLESS  LOOP '+RUN.loop:'STAGE '+(RUN.stage+1)+'/3',FW/2,MID-214,20,RUN.loop?'#ff0055':'#aaa');
-      {const v=powOf(curP());ptext('POWER',FW/2,MID-170,13,'#999');ptext(String(v),FW/2,MID-130,36,powCol(v))}
+      {const v=powOf(curP());ptext('POWER',FW/2,MID-170,13,'#999');ptext(fmtN(v),FW/2,MID-130,36,powCol(v));ptext('HP '+fmtN(hpMaxFor()),FW/2,MID-100,15,'#cccccc',PIX)}
       ptext(st.k==='boss'?'NULL':e?e.n:st.n,FW/2,MID-66,40,st.k==='boss'?'#ff0055':e?e.c:'#fff');
       ptext(st.k==='boss'?'ボス・HP3':(e?e.d:'')+'',FW/2,MID-16,18,'#fff',DOT);
       if(st.k!=='boss')ptext(diffName(curD())+'の動き'+(RUN.E&&RUN.E.quirk?'・'+QUIRK[RUN.E.quirk].n:''),FW/2,e?MID+12:MID-16,18,'#ccc',DOT);
@@ -327,6 +522,7 @@ function overlay(){
       ptext(RUN.loop?'LOOP '+RUN.loop+'   WIN '+RUN.wins:'STAGE '+RUN.reached+'/3',FW/2,MID-130,20,'#fff');
       ptext('PERKS '+RUN.pass.length,FW/2,MID-80,14,'#999');const cols=7;RUN.pass.slice(0,21).forEach((k,j)=>passIcon(k,FW/2+((j%cols)-(Math.min(RUN.pass.length,cols)-1)/2)*60,MID-30+Math.floor(j/cols)*60,48,false,RUN.lv[k]||1));
       if(RUN.t>1)ptext('タップでタイトルへ',FW/2,MID+190,20,'#fff',DOT)})}
+  drawPuckRing();drawScore();drawPops();
 }
 function dim(a){g.fillStyle='rgba(0,0,0,'+a+')';g.fillRect(-40,FY0,FW+80,FL)}
 
@@ -360,14 +556,27 @@ function goStage(s){ensureRun();RUN.stage=s;pickEnemy();startMatch()}
 function build(){PN.innerHTML='';REF=[];CUR=PN;
   {const w=wrap();btn(w,'すべて開く',()=>{for(const d of PN.querySelectorAll('details'))d.open=true});btn(w,'すべて閉じる',()=>{for(const d of PN.querySelectorAll('details'))d.open=false})}
   h('進行',1);{const w=wrap();btn(w,'ザコ戦',()=>goStage(0));btn(w,'強敵戦',()=>goStage(1));btn(w,'ボス戦',()=>goStage(2));btn(w,'新しいラン',()=>newRun());btn(w,'タイトル',()=>toTitle())}
-  {const w=wrap();btn(w,'いま勝ち',()=>{if(!inGame())return;if(BOSS.on){BOSS.hp=1;BOSS.rw=[]}else P[0].score=RULE.win-1;goal(0)});btn(w,'いま負け',()=>{if(!inGame())return;if(BOSS.on)BOSS.lives=1;else P[1].score=RULE.win-1;goal(1)})}
+  {const w=wrap();btn(w,'いま勝ち',()=>{if(state!=='play')return;RUN.hp=1;if(!(CS.c>0))applyC(SC.c.m*whet(),'m');goal(0)});btn(w,'いま負け',()=>{if(state!=='play')return;RUN.life=1;goal(1)})}
   {const w=wrap();btn(w,'報酬を引く',()=>{ensureRun();if(state==='rg_pick')return;RUN.sbBack=state;makeCards();state='rg_pick';RUN.t=1});btn(w,'ボス後の報酬を引く',()=>{ensureRun();if(state==='rg_pick')return;RUN.sbBack=state;makeCards(true);state='rg_pick';RUN.t=1})}
   {const w=wrap();btn(w,'エンドレスへ',()=>{ensureRun();RUN.loop=Math.max(1,RUN.loop);RUN.stage=0;pickEnemy();toIntro()});btn(w,'パーク一覧',()=>openList('run'));btn(w,'パーク図鑑',()=>openList('all'))}
   row('周回 LOOP（0＝最初の1周）',()=>RUN.loop,1,v=>{RUN.loop=clamp(v,0,50);if(RUN.loop>0&&RUN.stage>1)RUN.stage=0});
   h('HP');{const w=wrap();btn(w,'自分の HP 無限',()=>{RG.infMe=!RG.infMe},()=>RG.infMe);btn(w,'相手の HP 無限',()=>{RG.infEnemy=!RG.infEnemy},()=>RG.infEnemy)}
-  row('HP（試合ごと）',()=>RG.hp,1,v=>{RG.hp=clamp(v,1,9);RULE.win=RG.hp});
-  row('自分の HP',()=>BOSS.on?BOSS.lives:RULE.win-P[1].score,1,v=>{if(BOSS.on)BOSS.lives=clamp(v,1,9);else P[1].score=clamp(RULE.win-v,0,RULE.win-1)});
-  row('相手の HP',()=>BOSS.on?BOSS.hp:RULE.win-P[0].score,1,v=>{if(BOSS.on){BOSS.hp=clamp(v,1,BOSSC.hp);BOSS.phase=BOSS.hp<=BOSSC.ph3?3:BOSS.hp<=BOSSC.ph2?2:1}else P[0].score=clamp(RULE.win-v,0,RULE.win-1)});
+  row('自分のライフ',()=>RUN.life,1,v=>{RUN.life=clamp(Math.round(v),1,SC.life.max)});
+  row('相手の HP（今）',()=>Math.round(RUN.hp),Math.max(1,Math.round(RUN.hpMax*.1)),v=>{RUN.hp=clamp(Math.round(v),1,RUN.hpMax);RUN.hpShow=RUN.hp;if(BOSS.on)BOSS.hp=clamp(Math.ceil(RUN.hp/RUN.hpMax*3),1,3)});
+  row('相手の最大 HP（今）',()=>RUN.hpMax,0,()=>{});
+  h('チャクラ（得点）');
+  row('今の C',()=>Math.round(CS.c),0,()=>{});row('段階（0赤〜6紫・7虹）',()=>CS.tier,0,()=>{});row('ラリー往復',()=>rally,0,()=>{});
+  {const w=wrap();btn(w,'C=紫',()=>{applyC(SC.tier[6]*whet(),'w')});btn(w,'C=白',()=>{applyC(SC.tier[5]*whet(),'w')});btn(w,'C=0',()=>{CS.c=0;CS.tier=0});btn(w,'ラリー +5',()=>{rally+=5});
+    btn(w,'バンク印',()=>{CS.tr.bank=1});btn(w,'ポスト印',()=>{CS.tr.post=1});btn(w,'ロング印',()=>{CS.tr.long=1})}
+  {const L={w:'打撃 弱',m:'打撃 中',s:'打撃 強',f:'打撃 速',smash:'スマッシュ',parry:'パリィ',sup:'スーパー',boost:'加速床',jump:'ジャンプ台',bump:'バンパー'};for(const k in SC.c)row('C '+L[k],()=>SC.c[k],5,v=>SC.c[k]=clamp(v,1,999))}
+  row('C の上限',()=>SC.cap,10,v=>SC.cap=clamp(v,20,9999));
+  {const L={bank:'バンク',bank2:'バンク2回〜',post:'ポスト',air:'空中',long:'ロング'};for(const k in SC.tr)row('トリック '+L[k],()=>SC.tr[k],.05,v=>SC.tr[k]=clamp(Math.round(v*100)/100,0,5))}
+  row('ラリー倍率の伸び／往復',()=>SC.ral.step,.01,v=>SC.ral.step=clamp(Math.round(v*100)/100,0,1));row('ラリー倍率の上限',()=>SC.ral.max,.5,v=>SC.ral.max=clamp(v,1,20));
+  row('最低ダメージ（最大HPの割合）',()=>SC.minPct,.01,v=>SC.minPct=clamp(Math.round(v*100)/100,0,1));row('4秒爆発の最低 C',()=>SC.explodeMin,5,v=>SC.explodeMin=clamp(v,1,500));
+  row('HP ザコ',()=>SC.hp.zako,10,v=>SC.hp.zako=clamp(v,10,99999));row('HP 強敵の倍率',()=>SC.hp.elite,.1,v=>SC.hp.elite=clamp(Math.round(v*10)/10,.5,10));row('HP NULL',()=>SC.hp.nullHp,50,v=>SC.hp.nullHp=clamp(v,50,999999));
+  row('HP 周回の伸び（〜5周）',()=>SC.hp.g1,.05,v=>SC.hp.g1=clamp(Math.round(v*100)/100,1,5));row('HP 周回の伸び（6周〜）',()=>SC.hp.g2,.1,v=>SC.hp.g2=clamp(Math.round(v*100)/100,1,10));row('伸びが変わる周',()=>SC.hp.gN,1,v=>SC.hp.gN=clamp(v,0,50));
+  row('研ぎ（〜5周）',()=>SC.whet.a,.01,v=>SC.whet.a=clamp(Math.round(v*100)/100,1,3));row('研ぎ（6周〜）',()=>SC.whet.b,.01,v=>SC.whet.b=clamp(Math.round(v*100)/100,1,5));
+  row('ライフの上限',()=>SC.life.max,1,v=>{SC.life.max=clamp(v,1,12);RUN.life=Math.min(RUN.life,SC.life.max)});row('報酬のライフ回復',()=>SC.life.heal,1,v=>SC.life.heal=clamp(v,0,12));
   h('自分のパーク（今の試合にもすぐ反映）');{const w=wrap();for(const k of PKEYS)btn(w,PASS[k].n,()=>{const i=RUN.pass.indexOf(k);if(i>=0)RUN.pass.splice(i,1);else{RUN.pass.push(k);RUN.lv[k]=RUN.lv[k]||1}if(inGame())applyMods()},()=>RUN.pass.includes(k))}
   for(const k of PKEYS.filter(k=>PASS[k].st))row(PASS[k].n+' Lv',()=>RUN.pass.includes(k)?(RUN.lv[k]||1):0,1,v=>{v=clamp(v,0,9);const i=RUN.pass.indexOf(k);if(v<=0){if(i>=0)RUN.pass.splice(i,1);delete RUN.lv[k]}else{if(i<0)RUN.pass.push(k);RUN.lv[k]=v}if(inGame())applyMods()});
   {const w=wrap();for(const k of KEYS.filter(k=>k!=='super'))btn(w,'ひいき:'+IT[k].n,()=>{RUN.fav=k;if(inGame())applyMods()},()=>RUN.fav===k)}
