@@ -60,11 +60,12 @@ const PASS={
   slot:{n:'アイテム枠 +1',d:['アイテム欄が','3つになる'],ic:'+',c:'#ffffff',rare:1,ap:()=>{}},
   // ---- チャクラ（得点）系：効果は得点計算の中で参照する（k＝plus：＋C／mult：×倍率／trick：トリック／act：発動。報酬の1枚は plus か mult から出す）----
   smashp:{n:'スマッシュ職人',d:['スマッシュの','Cが上がる'],ic:'S',c:'#ff3366',st:1,k:'plus',ap:()=>{}},
+  sokoage:{n:'底上げ',d:['すべての当たりの','Cが上がる'],ic:'底',c:'#ffcc99',st:1,k:'plus',ap:()=>{}},
   jumpm:{n:'跳躍の極意',d:['ジャンプ台のCと','空中ゴールが強い'],ic:'U',c:'#ffaa00',st:1,k:'plus',ap:()=>{}},
   gyaku:{n:'逆境の気',d:['ライフ3以下の','とき C が上がる'],ic:'X',c:'#ff6644',st:1,k:'plus',ap:()=>{}},
   chiku:{n:'蓄気',d:['自陣で持つ間','Cがたまる'],ic:'C',c:'#55ddaa',st:1,k:'plus',ap:()=>{}},
   counter:{n:'反撃の型',d:['パリィのCが','大きく伸びる'],ic:'R',c:'#3399ff',st:1,k:'mult',ap:()=>{}},
-  shiden:{n:'紫電',d:['Cが紫のとき','ダメージ大・他は×0.85'],ic:'D',c:'#c050ff',st:1,k:'mult',ap:()=>{}},
+  shiden:{n:'紫電',d:['Cが紫のとき','ダメージが大きくなる'],ic:'D',c:'#c050ff',st:1,k:'mult',ap:()=>{}},
   bankm:{n:'バンク名人',d:['バンクゴールの','トリックが増える'],ic:'K',c:'#00ffff',st:1,k:'trick',ap:()=>{}},
   postm:{n:'ポスト狙い',d:['ポストゴールの','トリックが増える'],ic:'O',c:'#ffffff',st:1,k:'trick',ap:()=>{}},
   sokko:{n:'速攻',d:['3往復以内の','ゴールにトリック'],ic:'V',c:'#ffee44',st:1,k:'trick',ap:()=>{}},
@@ -86,8 +87,8 @@ const favItems=()=>KEYS.filter(q=>q!=='super'&&(q!=='jump'||RUN.pass.includes('j
 const FXT_P={hard:n=>'打つ速さ +'+12*n+'%',big:n=>'マレット +'+25*n+'%',wide:n=>'相手のゴール 左右に +'+Math.min(20*n,WSEG-RC),box:n=>'箱の間隔 ×'+Math.pow(.65,n).toFixed(2),
   life:n=>'置いた物 ×'+(1+.6*n).toFixed(1),fav:()=>IT[RUN.fav].n+' が3倍出やすい',gosen:()=>'パリィ成功で箱がすぐ出る',giri:()=>'受付半分・成功で次のダメージ ×2',
   zan:n=>'パリィ後の敵スタン +'+(.2*n).toFixed(1)+'秒',tsuki:n=>'パリィ球に当たった敵 '+(.3*n).toFixed(1)+'秒スタン',
-  smashp:n=>'スマッシュのC +'+15*n,jumpm:n=>'ジャンプ台のC +'+12*n+'・空中 +'+(.1*n).toFixed(1),gyaku:n=>'ライフ3以下で C +'+10*n,chiku:n=>'自陣で持つ間 1秒ごと C +'+8*n,
-  counter:n=>'パリィのC ×'+mAt(n),shiden:n=>'紫の時 ×'+mAt(n)+'・他は×0.85',bankm:n=>'バンク +'+(.2*n).toFixed(1),postm:n=>'ポスト +'+(.3*n).toFixed(1),sokko:n=>'3往復以内 +'+(.5*n).toFixed(1),
+  smashp:n=>'スマッシュのC +'+15*n,sokoage:n=>'すべての当たりのC +'+6*n,jumpm:n=>'ジャンプ台のC +'+12*n+'・空中 +'+(.1*n).toFixed(1),gyaku:n=>'ライフ3以下で C +'+10*n,chiku:n=>'自陣で持つ間 1秒ごと C +'+8*n,
+  counter:n=>'パリィのC ×'+mAt(n),shiden:n=>'紫の時 ×'+mAt(n),bankm:n=>'バンク +'+(.2*n).toFixed(1),postm:n=>'ポスト +'+(.3*n).toFixed(1),sokko:n=>'3往復以内 +'+(.5*n).toFixed(1),
   nagaki:n=>'ラリー上限 +'+(.5*n).toFixed(1)+'・5往復未満×0.85',togi:n=>'白以上で球 +'+(15+10*(n-1))+'%・バンパー貫通',namak:n=>'赤〜橙でゴール→次のC +'+30*n,kasane:n=>'パリィで C を足す（加算 ×'+Math.pow(1.2,n-1).toFixed(2)+'）・打撃は半分',
   renge:n=>'触るたび C +'+4*n+' ずつ重なる',kyuki:()=>'敵HP半分以上を1本で→ライフ+1',yoin:n=>'C の '+Math.round(Math.min(.75,.3+.15*(n-1))*100)+'% を次のパックへ',kaihou:()=>'そのラリー中 C が下がらない・虹で×1.3',amp:n=>'全ダメージ ×'+mAt(n),
   shinshoku:n=>'ブレイクなし・敵マレットへの打撃で C×'+Math.round(shinRate(n)*100)+'% のダメージ',
@@ -204,6 +205,7 @@ function setC(kind){const C=SC.c;let c=0;const used=[];
   if(isMallet(kind)&&pl('renge')){CS.streak++;c+=4*pl('renge')*CS.streak;used.push('renge')}
   if(CS.pend>0){c+=CS.pend;CS.pend=0;used.push('yoin')}
   if(RUN.nextC>0){c+=RUN.nextC;RUN.nextC=0;used.push('namak')}
+  if(pl('sokoage')){c+=6*pl('sokoage');used.push('sokoage')} // 底上げ：すべての当たりの C +6/Lv（無条件の汎用加算）
   applyC(c,kind,used)}
 const mKind=sp=>sp>SMASH?'smash':sp<300?'w':sp<700?'m':sp<1100?'s':'f';
 function calcDamage(expl){const T0=SC.tr;let c=CS.c>0?CS.c:SC.c.w;if(expl)c=Math.max(c,SC.explodeMin);
@@ -223,7 +225,7 @@ function calcDamage(expl){const T0=SC.tr;let c=CS.c>0?CS.c:SC.c.w;if(expl)c=Math
   d.T=(1+sum)*d.rm; // トリック値 T＝（1＋各種加算）×ラリー倍率（ラリー倍率は最後に掛ける）
   let mm=1;const pm=(n,v,pk)=>{mm*=v;d.mnote.push({n,v});if(pk)d.perks.add(pk)}; // ×系パークは「C を N 倍した」ものとして見せる
   if(pl('amp'))pm('AMP',mAt(pl('amp')),'amp');
-  if(pl('shiden'))pm('紫電',CS.tier>=6?mAt(pl('shiden')):.85,'shiden');
+  if(pl('shiden')&&CS.tier>=6)pm('紫電',mAt(pl('shiden')),'shiden'); // 紫電：紫以外は ×1.0（罰なし。v1.78〜）
   if(pl('kaihou')&&CS.tier>=7)pm('虹',1.3,'kaihou');
   if(pl('nagaki')&&rally<5)pm('長期戦',.85,'nagaki');
   if(RUN.double)pm('×2',2,'giri');
