@@ -91,7 +91,7 @@ const FXT_P={hard:n=>'打つ速さ +'+12*n+'%',big:n=>'マレット +'+25*n+'%',
   renge:n=>'触るたび C +'+4*n+' ずつ重なる',kyuki:()=>'敵HP半分以上を1本で→ライフ+1',yoin:n=>'C の '+Math.round(Math.min(.75,.3+.15*(n-1))*100)+'% を次のパックへ',kaihou:()=>'C の上限なし・虹で×1.3',amp:n=>'全ダメージ ×'+mAt(n),
   jump:n=>'出やすさ '+RG.jumpW[Math.min(n,RG.jumpW.length-1)]+'（ほかは5）・敵の方へ飛ぶ',homing:n=>'曲がる強さ ×'+n+(n>=2?'・跳ね返っても'+RG.homeT+'秒':''),slot:()=>'アイテム欄 3つ'};
 const FXT_E={hard:n=>'打つ速さ +'+12*n+'%',big:n=>'マレット +'+25*n+'%',wide:n=>'自分のゴール 左右に +'+Math.min(20*n,WSEG-RC),life:n=>'ジャンプ台 ×'+(1+.6*n).toFixed(1)};
-const RUN={dur:0,durMax:300,durFlash:0,life:7,hp:100,hpMax:100,hpShow:100,hpFlash:0,sc:null,scT:0,pops:[],carry:0,nextC:0,maxDmg:0,expl:false,home:0,listMode:'run',listPg:0,sbBack:null,dOv:null,pOv:null,E:null,items:[],listBack:null,on:false,stage:0,loop:0,wins:0,pass:[],epass:[],lv:{},elv:{},fav:'jump',skills:[],ov:{},cpuOv:{},double:false,res:null,t:0,cards:[],enemy:null,
+const RUN={shots:[],breakT:0,dur:0,durMax:300,durFlash:0,life:7,hp:100,hpMax:100,hpShow:100,hpFlash:0,sc:null,scT:0,pops:[],carry:0,nextC:0,maxDmg:0,expl:false,home:0,listMode:'run',listPg:0,sbBack:null,dOv:null,pOv:null,E:null,items:[],listBack:null,on:false,stage:0,loop:0,wins:0,pass:[],epass:[],lv:{},elv:{},fav:'jump',skills:[],ov:{},cpuOv:{},double:false,res:null,t:0,cards:[],enemy:null,
   sk:{jump:0,charge:0,block:0},tele:[],pfl:{},reached:0};
 let SB_FREEZE=false,SB_SLOW=false;
 
@@ -156,7 +156,9 @@ const diffName=d=>d<.2?'とてもよわい':d<.5?'よわい':d<.8?'ややよわ�
 const SC={
   c:{w:10,m:20,s:30,f:40,smash:60,parry:80,sup:100,boost:40,jump:35,bump:25}, // C の基本値（研ぎの前）：打撃 弱/中/強/速・スマッシュ・パリィ・スーパー・加速床・ジャンプ台・バンパー
   cap:150,rainbow:160,tier:[0,15,25,40,60,80,100], // C の上限／虹の境目／段階（赤 橙 黄 緑 青 白 紫）の境目（どれも研ぎで周回ごとに伸びる）
-  tr:{bank:.2,bank2:.4,post:.5,air:.3,long:.2},    // トリック値：バンク（2回以上）・ポスト・空中・ロング
+  tr:{bank:.2,bank2:.4,post:.5,air:.3,long:.2,    // トリック値の加算：バンク（2回以上）・ポスト・空中・ロング
+    stun:.1,wall:.01,item:.05,parry:.05,smash:.05, // 1ラウンド（サーブからゴールまで）の回数×：敵がスタンした・壁に当たった・アイテムを使った・パリィした・スマッシュした
+    expl:.3,stunNow:.3,brk:.4},                    // 4秒ルールの爆発／敵がスタン中のゴール／敵が GUARD BREAK 中のゴール（ブレイク中はスタン中と重ならない）
   ral:{step:.1,max:3},minPct:.08,explodeMin:20,    // ラリー倍率の伸び・上限／最低ダメージ（敵の最大 HP の割合）／4秒ルール爆発の最低 C
   hp:{zako:100,elite:1.8,nullHp:600,g1:1.35,g2:2.2,gN:5}, // 敵の HP：ザコ・強敵の倍率・NULL／周回ごとの伸び（5周目まで g1、そのあと g2）
   whet:{a:1.08,b:1.25,n:5},                        // 研ぎ（C の基本値の伸び）：5周目まで a、そのあと b
@@ -170,61 +172,67 @@ const whet=()=>{const w=SC.whet,L=RUN.loop||0;return Math.pow(w.a,Math.min(L,w.n
 const tierOf=c=>{const x=c/whet();let t=0;for(let i=1;i<SC.tier.length;i++)if(x>=SC.tier[i])t=i;if(pl('kaihou')&&x>=SC.rainbow)t=7;return t};
 const tierHex=t=>t>=7?'#ff66ff':TCOL[clamp(t,0,6)];
 const tierCol=t=>t>=7?'hsl('+Math.floor(clock*240%360)+',100%,60%)':TCOL[clamp(t,0,6)]; // 虹は色相が回る（3D 用）
-const CS={c:0,tier:0,tr:{bank:0,post:0,air:0,long:0},streak:0,hold:0,pend:0};
+const CS={c:0,tier:0,kind:'w',pk:new Set(),tr:{bank:0,post:0,air:0,long:0},streak:0,hold:0,pend:0};
+const CR={stun:0,wall:0,item:0,parry:0,smash:0}; // 1ラウンド中の回数（サーブで 0 に戻る）
 const isMallet=k=>k==='smash'||k==='w'||k==='m'||k==='s'||k==='f';
 const UNITS=['','K','M','B','T','aa','ab','ac','ad','ae','af','ag','ah','ai','aj','ak','al','am','an'];
 function fmtN(n){n=Math.max(0,+n||0);if(n<1000)return String(Math.round(n));let u=0;while(n>=999.5&&u<UNITS.length-1){n/=1000;u++}return (n>=100?n.toFixed(0):n>=10?n.toFixed(1):n.toFixed(2))+UNITS[u]}
-function resetCS(){CS.c=RUN.carry>0?RUN.carry:0;CS.pend=RUN.carry>0?RUN.carry:0;RUN.carry=0;CS.tier=CS.c>0?tierOf(CS.c):0;CS.tr={bank:0,post:0,air:0,long:0};CS.streak=0;CS.hold=0}
+function resetCS(){for(const k in CR)CR[k]=0;RUN.breakT=0;CS.pk=new Set();CS.kind='w';CS.c=RUN.carry>0?RUN.carry:0;CS.pend=RUN.carry>0?RUN.carry:0;RUN.carry=0;CS.tier=CS.c>0?tierOf(CS.c):0;CS.tr={bank:0,post:0,air:0,long:0};CS.streak=0;CS.hold=0}
 function pop(txt,x,y,col,size,life=1.1,vy=-40){RUN.pops.push({txt,x,y,col,size,life,t:0,vy})}
-function applyC(c,kind){const old=CS.tier;CS.c=c;CS.tier=tierOf(c);
+function applyC(c,kind,used){const old=CS.tier;CS.c=c;CS.tier=tierOf(c);CS.kind=kind;CS.pk=new Set(used||[]);
   CS.tr={bank:0,post:0,air:0,long:(isMallet(kind)&&puck.y>MID+60)?1:0}; // C を上書きしたら印は付け直し
   const col=tierHex(CS.tier);addFx('wave',puck.x,puck.y,52,'',col); // 上書きのたびに小さな輪（数字は段階が上がったときだけ）
   if(CS.tier>old){pop('C '+fmtN(c),puck.x,puck.y-52,col,CS.tier>=6?30:22,1.0);beep(500+CS.tier*140,.05,'square',.05)}
   if(isMallet(kind)&&CS.tier>=5&&pl('togi')){const k=1.15+.1*(pl('togi')-1);puck.vx*=k;puck.vy*=k} // 研ぎ澄まし：白以上でパックが速くなる
 }
-function setC(kind){const W=whet(),C=SC.c;let c=0;
-  if(kind==='smash')c=C.smash+15*pl('smashp');
-  else if(isMallet(kind)){c=C[kind];if(pl('kasane'))c*=.5}
-  else if(kind==='parry')c=C.parry*mAt(pl('counter'));
+function setC(kind){const W=whet(),C=SC.c;let c=0;const used=[];
+  if(kind==='smash'){c=C.smash+15*pl('smashp');if(pl('smashp'))used.push('smashp')}
+  else if(isMallet(kind)){c=C[kind];if(pl('kasane')){c*=.5;used.push('kasane')}}
+  else if(kind==='parry'){c=C.parry*mAt(pl('counter'));if(pl('counter'))used.push('counter')}
   else if(kind==='sup')c=C.sup;
   else if(kind==='boost')c=C.boost;
-  else if(kind==='jump')c=C.jump+12*pl('jumpm');
+  else if(kind==='jump'){c=C.jump+12*pl('jumpm');if(pl('jumpm'))used.push('jumpm')}
   else if(kind==='bump')c=C.bump;
   c*=W;
-  if(kind==='parry'&&pl('kasane'))c=CS.c+c*Math.pow(1.2,pl('kasane')-1); // 気の重ね：パリィは C を置きかえず足す
-  if(pl('gyaku')&&RUN.life<=3)c+=10*pl('gyaku')*W;
-  if(isMallet(kind)&&pl('renge')){CS.streak++;c+=4*pl('renge')*CS.streak*W}
-  if(CS.pend>0){c+=CS.pend;CS.pend=0}
-  if(RUN.nextC>0){c+=RUN.nextC;RUN.nextC=0}
-  applyC(Math.min(pl('kaihou')?1e9:SC.cap*W,c),kind)}
+  if(kind==='parry'&&pl('kasane')){c=CS.c+c*Math.pow(1.2,pl('kasane')-1);used.push('kasane')} // 気の重ね：パリィは C を置きかえず足す
+  if(pl('gyaku')&&RUN.life<=3){c+=10*pl('gyaku')*W;used.push('gyaku')}
+  if(isMallet(kind)&&pl('renge')){CS.streak++;c+=4*pl('renge')*CS.streak*W;used.push('renge')}
+  if(CS.pend>0){c+=CS.pend;CS.pend=0;used.push('yoin')}
+  if(RUN.nextC>0){c+=RUN.nextC;RUN.nextC=0;used.push('namak')}
+  applyC(Math.min(pl('kaihou')?1e9:SC.cap*W,c),kind,used)}
 const mKind=sp=>sp>SMASH?'smash':sp<300?'w':sp<700?'m':sp<1100?'s':'f';
-function calcDamage(expl){const W=whet();const c=CS.c>0?CS.c:SC.c.w*W;
-  const d={c,tricks:[],tm:1,rm:1,mm:1,mnote:[],total:0,expl:!!expl,rally:rally};
-  if(expl){d.c=Math.max(c,SC.explodeMin*W);d.total=d.c}
-  else{let sum=0;const add=(n,v,col)=>{sum+=v;d.tricks.push({n,v,col})},T=SC.tr;
-    if(CS.tr.bank>=1)add('BANK',(CS.tr.bank>=2?T.bank2:T.bank)+.2*pl('bankm'),'#00ffff');
-    if(CS.tr.post)add('POST',T.post+.3*pl('postm'),'#ffffff');
-    if(puck.air>0)add('AIR',T.air+.1*pl('jumpm'),'#ffaa00');
-    if(CS.tr.long)add('LONG',T.long,'#55ff55');
-    if(pl('sokko')&&rally<=3)add('SOKKO',.5*pl('sokko'),'#ffee44');
-    d.tm=1+sum;d.rm=Math.min(1+SC.ral.step*rally,SC.ral.max+.5*pl('nagaki'));
-    let mm=1;const pm=(n,v)=>{mm*=v;d.mnote.push({n,v})};
-    if(pl('amp'))pm('AMP',mAt(pl('amp')));
-    if(pl('shiden'))pm('紫電',CS.tier>=6?mAt(pl('shiden')):.85);
-    if(pl('kaihou')&&CS.tier>=7)pm('虹',1.3);
-    if(pl('nagaki')&&rally<5)pm('長期戦',.85);
-    if(RUN.double)pm('×2',2);
-    d.mm=mm;d.total=d.c*d.tm*d.rm*mm}
+function calcDamage(expl){const W=whet(),T0=SC.tr;let c=CS.c>0?CS.c:SC.c.w*W;if(expl)c=Math.max(c,SC.explodeMin*W);
+  const d={c,cEff:c,tricks:[],sum:0,T:1,rm:1,mm:1,mnote:[],perks:new Set(CS.pk),total:0,expl:!!expl,rally,kind:expl?'expl':(CS.c>0?CS.kind:'w'),tier:CS.tier};
+  let sum=0;const add=(n,v,col,pk)=>{if(!(v>0))return;sum+=v;d.tricks.push({n,v,col});if(pk)d.perks.add(pk)};
+  if(expl)add('EXPLODE',T0.expl,'#ff6644');
+  if(CS.tr.bank>=1)add('BANK',(CS.tr.bank>=2?T0.bank2:T0.bank)+.2*pl('bankm'),'#00ffff',pl('bankm')?'bankm':null);
+  if(CS.tr.post)add('POST',T0.post+.3*pl('postm'),'#ffffff',pl('postm')?'postm':null);
+  if(puck.air>0)add('AIR',T0.air+.1*pl('jumpm'),'#ffaa00',pl('jumpm')?'jumpm':null);
+  if(CS.tr.long)add('LONG',T0.long,'#55ff55');
+  if(pl('sokko')&&rally<=3)add('SOKKO',.5*pl('sokko'),'#ffee44','sokko');
+  const cnt=(n,k,col)=>{if(CR[k]>0)add(n+'×'+CR[k],CR[k]*T0[k],col)}; // 1ラウンド中の動きを全部トリック値に乗せる
+  cnt('STUN','stun','#99ddff');cnt('WALL','wall','#aaaaaa');cnt('ITEM','item','#ffcc66');cnt('PARRY','parry','#3399ff');cnt('SMASH','smash','#ff3366');
+  if(RUN.breakT>0)add('BREAK',T0.brk,'#66ccff');else if(P[1].stun>0)add('STUNNED',T0.stunNow,'#99ddff');
+  d.sum=sum;
+  const raw=1+SC.ral.step*rally;d.rm=Math.min(raw,SC.ral.max+.5*pl('nagaki'));if(pl('nagaki')&&raw>SC.ral.max)d.perks.add('nagaki');
+  d.T=(1+sum)*d.rm; // トリック値 T＝（1＋各種加算）×ラリー倍率（ラリー倍率は最後に掛ける）
+  let mm=1;const pm=(n,v,pk)=>{mm*=v;d.mnote.push({n,v});if(pk)d.perks.add(pk)}; // ×系パークは「C を N 倍した」ものとして見せる
+  if(pl('amp'))pm('AMP',mAt(pl('amp')),'amp');
+  if(pl('shiden'))pm('紫電',CS.tier>=6?mAt(pl('shiden')):.85,'shiden');
+  if(pl('kaihou')&&CS.tier>=7)pm('虹',1.3,'kaihou');
+  if(pl('nagaki')&&rally<5)pm('長期戦',.85,'nagaki');
+  if(RUN.double)pm('×2',2,'giri');
+  d.mm=mm;d.cEff=c*mm;d.total=d.cEff*d.T;
   const mn=RUN.hpMax*SC.minPct;if(d.total<mn){d.total=mn;d.min=true}
   d.total=Math.round(d.total);return d}
-function guardBreak(){RUN.dur=0;RUN.durFlash=1.2;stunE(RG.dura.stun);sfx('stun',P[1].x);juice(16,.08,.9,.5,'#66ccff');
+function guardBreak(){RUN.dur=0;RUN.durFlash=1.2;RUN.breakT=RG.dura.stun;stunE(RG.dura.stun);sfx('stun',P[1].x);juice(16,.08,.9,.5,'#66ccff');
   pop('GUARD BREAK',P[1].x,P[1].y+64,'#66ccff',20,1.6,-20)}
 function postGoal(d,expl){const r=d.total/RUN.hpMax,col=tierHex(CS.tier);RUN.hpFlash=1;
   if(r>=.5||d.kill){juice(26,.14,1.6,.9,'#ffffff');addFx('wave',FW/2,FY0,320,'','#ffffff')}else if(r>=.2)juice(14,.07,.9,.45,col);
   if(r>=.2)sfx('smash',1500,FW/2);if(r>=.5)sfx('boom',FW/2);
   for(const m of [1e3,1e6,1e9,1e12])if(d.total>=m&&(RUN.maxDmg||0)<m){pop(fmtN(m)+' BREAK!',FW/2,MID-220,'#ffee44',34,2,-10);juice(20,.1,1.2,.8,'#ffee44')} // 桁を初めて超えた
   RUN.maxDmg=Math.max(RUN.maxDmg||0,d.total);
-  if(pl('kyuki')&&d.total>=RUN.hpMax*.5)RUN.life=Math.min(SC.life.max,RUN.life+1);
+  if(pl('kyuki')&&d.total>=RUN.hpMax*.5){RUN.life=Math.min(SC.life.max,RUN.life+1);d.perks.add('kyuki')}
   if(pl('namak')&&CS.tier<=1)RUN.nextC=30*pl('namak')*whet();
   if(pl('yoin'))RUN.carry=CS.c*Math.min(.75,.3+.15*(pl('yoin')-1));
   if(d.kill&&!BOSS.on)addFx('nulldie',P[1].x,P[1].y,1,'','#3dff7a')}
@@ -233,7 +241,7 @@ function hpMaxFor(){const k=STAGES[RUN.stage].k;if(k==='boss')return SC.hp.nullH
   return Math.round(H.zako*(k==='elite'?H.elite:1)*gr*(1+SC.hpStep*(RUN.E?RUN.E.hpUp||0:0)))}
 
 /* ---- 試合を始める ---- */
-function startMatch(){RUN.double=false;RUN.tele=[];RUN.sc=null;RUN.pops=[];RUN.expl=false;if(!(RUN.life>0))RUN.life=SC.life.max;RUN.sk={jump:RG.jumpT*.6,charge:RG.chargeT*.6,block:1.5};
+function startMatch(){RUN.double=false;RUN.tele=[];RUN.sc=null;RUN.shots=[];RUN.breakT=0;RUN.pops=[];RUN.expl=false;if(!(RUN.life>0))RUN.life=SC.life.max;RUN.sk={jump:RG.jumpT*.6,charge:RG.chargeT*.6,block:1.5};
   const st=STAGES[RUN.stage];
   if(st.k==='boss'){BOSS.on=false;bossStart();Object.assign(LV[3],RUN.cpuOv)}
   else{bossOff();LV[4]=stageLv();start('cpu',4)}
@@ -285,6 +293,8 @@ goal=function(scorer){
   if(BOSS.on){const tier=kill?0:clamp(Math.ceil(RUN.hp/RUN.hpMax*3),1,3);BOSS.hp=kill?1:tier+1} // NULL は HP 600 を 3 段階（66%・33%）に分けて、本体のボス処理に渡す
   else P[0].score=kill?RULE.win-1:0;
   RUN.sc=d;postGoal(d,expl);
+  RUN.shots.push({kind:d.kind,c:d.c,cEff:d.cEff,mm:d.mm,mnote:d.mnote,T:d.T,sum:d.sum,rm:d.rm,rally:d.rally,tricks:d.tricks,perks:[...d.perks],dmg:d.total,kill,min:!!d.min,tier:d.tier}); // 結果画面用：どのショットで何点
+  RUN.breakT=0;
   return _goal(scorer)};
 const _explode=explode;
 explode=function(side){RUN.expl=RUN.on&&side===1;return _explode(side)};
@@ -292,8 +302,9 @@ explode=function(side){RUN.expl=RUN.on&&side===1;return _explode(side)};
 const _hit=hit;
 hit=function(x,y,sp,txt,who=-1,wn=null){
   if(RUN.on&&state==='play'){
-    if(wn){if(sp>=300&&CS.c>0&&CS.tr.bank<2){CS.tr.bank++;CS.tr.long=0;addFx('wave',x,y,46,'','#00ffff')}} // バンク：自分の打撃のあとに壁へ当たった
-    else if(who===0){if(sp>=80)setC(mKind(sp))}
+    if(wn){if(sp>=200)CR.wall++; // 壁に当たった回数（1ラウンド）
+      if(sp>=300&&CS.c>0&&CS.tr.bank<2){CS.tr.bank++;CS.tr.long=0;addFx('wave',x,y,46,'','#00ffff')}} // バンク：自分の打撃のあとに壁へ当たった
+    else if(who===0){if(sp>=80){const k=mKind(sp);if(k==='smash')CR.smash++;setC(k)}}
     else if(who===1){CS.tr.long=0;CS.streak=0;
       if(CS.c>0&&sp>=100&&P[1].stun<=0){RUN.dur+=CS.c; // 敵のマレットが受けた C を積み上げる。耐久力を超えるとスタン
         if(RUN.dur>=RUN.durMax)guardBreak()}}}
@@ -322,17 +333,21 @@ parryStart=function(i,nx,ny){const r=_parryStart(i,nx,ny);
   return r};
 /* パリィ：時間停止が終わったあと、敵は少し動けない（残心で長く） */
 const _parryFire=parryFire;
-parryFire=function(dx,dy){const i=PAR.who,r=_parryFire(dx,dy);if(RUN.on&&i===0)setC('parry');if(RUN.on&&i===0)RUN.home=RG.homeT;if(RUN.on&&i===0)stunE(RG.parStun+.2*(RUN.pass.includes('zan')?(RUN.lv.zan||1):0),RUN.pass.includes('zan')?'zan':null);return r};
-function stunE(t,pk){const b=P[1];b.stun=Math.max(b.stun,t);addFx('impact',b.x,b.y,60,'',AURA);if(pk)RUN.pfl[pk]=Math.max(RUN.pfl[pk]||0,.6)}
+parryFire=function(dx,dy){const i=PAR.who,r=_parryFire(dx,dy);if(RUN.on&&i===0){CR.parry++;setC('parry')}if(RUN.on&&i===0)RUN.home=RG.homeT;if(RUN.on&&i===0)stunE(RG.parStun+.2*(RUN.pass.includes('zan')?(RUN.lv.zan||1):0),RUN.pass.includes('zan')?'zan':null);return r};
+function stunE(t,pk){CR.stun++;const b=P[1];b.stun=Math.max(b.stun,t);addFx('impact',b.x,b.y,60,'',AURA);if(pk)RUN.pfl[pk]=Math.max(RUN.pfl[pk]||0,.6)}
 /* ジャンプ台は置いた人の相手のゴールへ向けて飛ばす（本体の it.aim） */
 const _place=place;
-place=function(d){const r=_place(d);const it=placed.find(q=>q.id===pid);if(RUN.on&&it&&it.type==='jump')it.aim=true;return r};
+place=function(d){const n0=pid,r=_place(d);if(RUN.on&&d.i===0&&pid!==n0)CR.item++;const it=placed.find(q=>q.id===pid);if(RUN.on&&it&&it.type==='jump')it.aim=true;return r};
+const _superOn=superOn;
+superOn=function(i,sl){const was=P[i].pw,r=_superOn(i,sl);if(RUN.on&&i===0&&!was&&P[0].pw)CR.item++;return r};
+const _stunP=stunP; // 本体のスタン（スーパーシュートを受けた）も数える
+stunP=function(i){if(RUN.on&&i===1)CR.stun++;return _stunP(i)};
 const _give=give;
 give=function(p){if(RUN.on&&p.i===0&&RUN.pass.includes('fav'))RUN.pfl.fav=.8;return _give(p)};
 
 const _update=update;
 update=function(dt){
-  for(const o of RUN.pops)o.t+=dt;RUN.pops=RUN.pops.filter(o=>o.t<o.life);RUN.hpFlash=Math.max(0,RUN.hpFlash-dt*2.5);RUN.durFlash=Math.max(0,RUN.durFlash-dt);if(RUN.sc)RUN.scT+=dt;
+  for(const o of RUN.pops)o.t+=dt;RUN.pops=RUN.pops.filter(o=>o.t<o.life);RUN.hpFlash=Math.max(0,RUN.hpFlash-dt*2.5);RUN.breakT=Math.max(0,RUN.breakT-dt);RUN.durFlash=Math.max(0,RUN.durFlash-dt);if(RUN.sc)RUN.scT+=dt;
   if(state==='title'){toTitle()} // 本体のタイトル（中断→QUIT など）はローグライクのタイトルへ
   if(state.startsWith('rg_')){clock+=dt;flash=Math.max(0,flash-dt*4);for(const f of fx)f.t+=dt;for(let k=fx.length-1;k>=0;k--)if(fx[k].t>fx[k].life)fx.splice(k,1);
     RUN.t+=dt;if(state==='rg_intro'&&RUN.t>2.2)startMatch();return}
@@ -344,7 +359,7 @@ update=function(dt){
     const sp=Math.hypot(puck.vx,puck.vy),a=Math.atan2(puck.vy,puck.vx),b=Math.atan2(FY0-30-puck.y,FW/2-puck.x);let df=b-a;while(df>Math.PI)df-=2*Math.PI;while(df<-Math.PI)df+=2*Math.PI;
     const mx=RG.homing*(RUN.lv.homing||1)*dt*ts*SPD,t=a+clamp(df,-mx,mx);if(sp>1&&puck.y>FY0+40){puck.vx=Math.cos(t)*sp;puck.vy=Math.sin(t)*sp}}
   if(RUN.on&&state==='play'&&live&&PAR.who<0&&SUP.aim<0&&pl('chiku')&&CS.c>0&&puck.y>MID&&!puck.boom){ // 蓄気：自陣で持つ間、1秒ごとに C がたまる
-    CS.hold+=dt;if(CS.hold>=1){CS.hold-=1;const old=CS.tier;CS.c=Math.min(pl('kaihou')?1e9:SC.cap*whet(),CS.c+8*pl('chiku')*whet());CS.tier=tierOf(CS.c);if(CS.tier>old)pop('C '+fmtN(CS.c),puck.x,puck.y-52,tierHex(CS.tier),22,1)}}
+    CS.hold+=dt;if(CS.hold>=1){CS.hold-=1;const old=CS.tier;CS.c=Math.min(pl('kaihou')?1e9:SC.cap*whet(),CS.c+8*pl('chiku')*whet());CS.tier=tierOf(CS.c);CS.pk.add('chiku');if(CS.tier>old)pop('C '+fmtN(CS.c),puck.x,puck.y-52,tierHex(CS.tier),22,1)}}
   else if(puck.y<=MID)CS.hold=0;
   if(RUN.on&&par0===0&&lt0!==1&&puck.lastTouch===1&&RUN.pass.includes('tsuki'))stunE(.3*(RUN.lv.tsuki||1),'tsuki'); // つらぬき：パリィ球に当たった敵
   for(const k in RUN.pfl)RUN.pfl[k]=Math.max(0,RUN.pfl[k]-dt);
@@ -450,15 +465,34 @@ function drawScore(){const s=RUN.sc;if(!s||state!=='goal')return;const t=RUN.scT
   try{drawScore0(s,t)}finally{g.restore()}}
 function drawScore0(s,t){
   if(s.life){const a=Math.min(1,t*4);g.globalAlpha=a;ptext('LIFE −1',FW/2,MID-60,34,'#ff3355',PIX);g.globalAlpha=1;return}
-  const col=tierHex(CS.tier),ratio=s.total/RUN.hpMax;
-  s.tricks.forEach((tk,j)=>{if(t<.1+j*.12)return;ptext(tk.n+' +'+tk.v.toFixed(1),FW/2+(j-(s.tricks.length-1)/2)*150,MID-170,13,tk.col,PIX)});
-  if(t>.05){let line=fmtN(s.c)+' × '+(s.expl?'1':s.tm.toFixed(2))+' × '+(s.expl?'1':s.rm.toFixed(1));if(s.mm!==1)line+=' × '+(s.mm<10?s.mm.toFixed(2):fmtN(s.mm));
-    ptext(line,FW/2,MID-122,s.mm!==1?22:26,'#ffffff',PIX);
-    if(s.mnote.length)ptext(s.mnote.map(m=>m.n).join(' / '),FW/2,MID-92,12,'#c9a0ff',DOT)}
+  const col=tierHex(s.tier!=null?s.tier:CS.tier),ratio=s.total/RUN.hpMax;
+  const n=s.tricks.length,per=5; // トリックの加算（1ラウンド中の動きを全部）
+  s.tricks.forEach((tk,j)=>{if(t<.08+j*.07)return;const row=Math.floor(j/per),cn=Math.min(per,n-row*per),k=j%per;ptext(tk.n+' +'+tk.v.toFixed(2),FW/2+(k-(cn-1)/2)*112,MID-216+row*22,10,tk.col,PIX)});
+  if(t>.05){ptext('C '+fmtN(s.cEff)+' × T '+s.T.toFixed(2),FW/2,MID-142,25,'#ffffff',PIX); // ×系パークは C を N 倍したものとして見せる
+    let note='C '+fmtN(s.c);if(s.mm!==1)note+=' ×'+(s.mm<10?s.mm.toFixed(2):fmtN(s.mm))+'（'+s.mnote.map(m=>m.n).join('・')+'）';
+    ptext(note,FW/2,MID-110,13,'#c9a0ff',DOT);
+    ptext('T ＝ (1 + '+s.sum.toFixed(2)+') × RALLY '+s.rm.toFixed(1),FW/2,MID-88,11,'#9fd0ff',PIX)}
   if(t>.35){const p=Math.min(1,(t-.35)*5),sz=Math.round((34+Math.min(26,Math.log10(Math.max(10,s.total))*5))*(1+Math.max(0,.35-(t-.35))*1.4));
     g.globalAlpha=p;ptext('＝ '+fmtN(s.total),FW/2,MID-34,sz,ratio>=.5?(blink(8)?'#ffffff':col):col,PIX);g.globalAlpha=1;
     if(s.min)ptext('MIN',FW/2+170,MID-34,12,'#ff8888',PIX);
     if(s.kill&&t>.8)ptext('K.O.',FW/2,MID+34,40,blink(6)?'#ffffff':'#ff0055',PIX)}}
+/* バトルの結果：どのショットで何点与えたか（C・T・計算で発動したパーク） */
+const SHOTN={w:'弱打',m:'打撃',s:'強打',f:'速打',smash:'SMASH',parry:'PARRY',sup:'SUPER',boost:'加速床',jump:'ジャンプ台',bump:'バンパー',expl:'4秒爆発'};
+function drawResult(w){const all=RUN.shots,tot=all.reduce((a,x)=>a+x.dmg,0),MAXR=8,RH=80;
+  const rows=all.length>MAXR?all.slice().sort((a,b)=>b.dmg-a.dmg).slice(0,MAXR):all;
+  ptext(w?(BOSS.on?'NULL DEFEATED!':'STAGE CLEAR!'):'GAME OVER',FW/2,FY0+52,w?30:36,w?YEL:'#ff0055');
+  ptext('TOTAL '+fmtN(tot)+'   SHOTS '+all.length+'   HP '+fmtN(RUN.hpMax),FW/2,FY0+96,14,'#ffffff',PIX);
+  if(!all.length){ptext('ダメージなし',FW/2,FY0+190,20,'#888',DOT)}
+  else{const y0=FY0+128;ptext('SHOT',40,y0,10,'#777',PIX,'left');ptext('C',262,y0,10,'#777',PIX,'right');ptext('T',330,y0,10,'#777',PIX,'right');ptext('DAMAGE',560,y0,10,'#777',PIX,'right');
+    rows.forEach((x,k)=>{const y=y0+24+k*RH;g.fillStyle='#16161e';g.fillRect(30,y-8,540,RH-6)
+      const tc=tierHex(x.tier||0);ptext(SHOTN[x.kind]||x.kind,40,y+14,17,tc,DOT,'left');
+      ptext(fmtN(x.cEff),262,y+14,15,x.mm!==1?'#e0b0ff':'#ffffff',PIX,'right');ptext(x.T.toFixed(2),330,y+14,15,'#9fd0ff',PIX,'right');
+      ptext(fmtN(x.dmg),560,y+14,19,x.kill?(blink(6)?'#ffffff':'#ff0055'):tc,PIX,'right');
+      let cx=40;for(const tk of x.tricks){const t2=tk.n+'+'+tk.v.toFixed(2).replace(/^0/,'');if(cx+t2.length*9>350)break;ptext(t2,cx,y+40,9,tk.col,PIX,'left');cx+=t2.length*9+10} // トリック（T の中身）
+      if(x.mm!==1)ptext('C '+fmtN(x.c)+' ×'+(x.mm<10?x.mm.toFixed(2):fmtN(x.mm))+'（'+x.mnote.map(m=>m.n).join('・')+'）',40,y+62,12,'#c9a0ff',DOT,'left'); // ×系パークは C を N 倍した形で
+      x.perks.slice(0,7).forEach((k2,j)=>passIcon(k2,372+j*26,y+36,22,false,RUN.lv[k2]||1)); // 計算で発動したパーク
+    });
+    if(all.length>MAXR)ptext('ほか '+(all.length-MAXR)+' 本（上位'+MAXR+'本を表示）',FW/2,y0+24+MAXR*RH+12,13,'#888',DOT)}}
 /* 敵の名前・HP・強さ（上の帯。画面の上から見て正しい向き） */
 function drawTop(){if(!RUN.on||!(MATCH_ST()||state==='rg_res'))return;const boss=BOSS.on,e=RUN.enemy,st=STAGES[RUN.stage];
   RUN.hpShow+=(RUN.hp-RUN.hpShow)*.12;if(Math.abs(RUN.hpShow-RUN.hp)<.5)RUN.hpShow=RUN.hp;
@@ -520,9 +554,8 @@ function overlay(){
       if(RUN.pass.length){ptext('YOU',FW/2,MID+112,13,'#999');const n=Math.min(RUN.pass.length,9);RUN.pass.slice(0,9).forEach((k,j)=>passIcon(k,FW/2+(j-(n-1)/2)*54,MID+154,44,false,RUN.lv[k]||1))}
       if(RUN.loop===0&&RUN.stage===0&&RUN.startPerk&&RUN.pass.includes(RUN.startPerk))ptext('START：'+PASS[RUN.startPerk].n,FW/2,MID+204,18,pcol(RUN.startPerk),DOT);
       if(blink(2))ptext('▶',FW/2,MID+244,24,'#fff',DOT)})}
-  else if(state==='rg_res'){const w=RUN.res==='win';if(RUN.t<resWait()-.6&&w&&BOSS.on)return;dim(.55*Math.min(1,RUN.t*3));
-    frame(0,()=>{ptext(w?(BOSS.on?'NULL DEFEATED!':'STAGE CLEAR!'):'GAME OVER',FW/2,MID-40,w?32:38,w?YEL:'#ff0055');
-      if(RUN.t>resWait())ptext('▶',FW/2,MID+60,26,'#fff',DOT)})}
+  else if(state==='rg_res'){const w=RUN.res==='win';if(RUN.t<resWait()-.6&&w&&BOSS.on)return;dim(.86*Math.min(1,RUN.t*3));
+    frame(0,()=>{drawResult(w);if(RUN.t>resWait()&&blink(2))ptext('▶',FW/2,FY1-50,28,'#fff',DOT)})}
   else if(state==='rg_pick'){dim(.78);frame(0,()=>{ptext(RUN.bossPick?'BONUS':'PASSIVE',FW/2,MID-240,26,YEL);ptext(RUN.bossPick?'レア1つ か ランダム2つ':'ひとつ選ぶ',FW/2,MID-208,17,'#bbb',DOT);
       RUN.cards.forEach((c,j)=>{const r=CARD(j),a=Math.min(1,Math.max(0,RUN.t*4-j*.4));if(a<=0)return;g.globalAlpha=a;const cx=r.x+r.w/2;
         if(c.pair){pbox(r.x,r.y,r.w,r.h,'#aaa','#0c0c14');ptext('RANDOM ×2',cx,r.y+30,14,'#fff');
@@ -589,7 +622,8 @@ function build(){PN.innerHTML='';REF=[];CUR=PN;
     btn(w,'バンク印',()=>{CS.tr.bank=1});btn(w,'ポスト印',()=>{CS.tr.post=1});btn(w,'ロング印',()=>{CS.tr.long=1})}
   {const L={w:'打撃 弱',m:'打撃 中',s:'打撃 強',f:'打撃 速',smash:'スマッシュ',parry:'パリィ',sup:'スーパー',boost:'加速床',jump:'ジャンプ台',bump:'バンパー'};for(const k in SC.c)row('C '+L[k],()=>SC.c[k],5,v=>SC.c[k]=clamp(v,1,999))}
   row('C の上限',()=>SC.cap,10,v=>SC.cap=clamp(v,20,9999));
-  {const L={bank:'バンク',bank2:'バンク2回〜',post:'ポスト',air:'空中',long:'ロング'};for(const k in SC.tr)row('トリック '+L[k],()=>SC.tr[k],.05,v=>SC.tr[k]=clamp(Math.round(v*100)/100,0,5))}
+  {const L={bank:'バンク',bank2:'バンク2回〜',post:'ポスト',air:'空中',long:'ロング',stun:'敵スタン/回',wall:'壁に当たる/回',item:'アイテム使用/回',parry:'パリィ/回',smash:'スマッシュ/回',expl:'4秒爆発',stunNow:'敵スタン中のゴール',brk:'GUARD BREAK 中のゴール'};for(const k in SC.tr)row('T '+L[k],()=>SC.tr[k],.01,v=>SC.tr[k]=clamp(Math.round(v*100)/100,0,5))}
+  row('今のラウンド：スタン／壁／アイテム',()=>CR.stun+'/'+CR.wall+'/'+CR.item,0,()=>{});
   row('ラリー倍率の伸び／往復',()=>SC.ral.step,.01,v=>SC.ral.step=clamp(Math.round(v*100)/100,0,1));row('ラリー倍率の上限',()=>SC.ral.max,.5,v=>SC.ral.max=clamp(v,1,20));
   row('最低ダメージ（最大HPの割合）',()=>SC.minPct,.01,v=>SC.minPct=clamp(Math.round(v*100)/100,0,1));row('4秒爆発の最低 C',()=>SC.explodeMin,5,v=>SC.explodeMin=clamp(v,1,500));
   row('HP ザコ',()=>SC.hp.zako,10,v=>SC.hp.zako=clamp(v,10,99999));row('HP 強敵の倍率',()=>SC.hp.elite,.1,v=>SC.hp.elite=clamp(Math.round(v*10)/10,.5,10));row('HP NULL',()=>SC.hp.nullHp,50,v=>SC.hp.nullHp=clamp(v,50,999999));
