@@ -459,20 +459,20 @@ function drawPuckRing(){if(!RUN.on||!MATCH_ST()||puck.boom)return;const x=puck.x
   g.restore()}
 function drawPops(){for(const o of RUN.pops){const k=o.t/o.life,sc=1+Math.max(0,.5-o.t*3),a=k>.7?1-(k-.7)/.3:1;g.globalAlpha=Math.max(0,a);
     ptext(o.txt,o.x,o.y+o.vy*o.t,Math.round(o.size*sc),o.col,PIX);g.globalAlpha=1}}
-/* ゴールの瞬間：「C × トリック × ラリー」→「＝ ダメージ」 */
+/* ゴールの瞬間：数字だけを大きく「100 × 1.7」→「＝ ダメージ」。大きさは HP 比で変わる */
 function drawScore(){const s=RUN.sc;if(!s||state!=='goal')return;const t=RUN.scT;
   const oy=BOSS.on&&BOSS.rwT>0?-170:0;g.save();g.translate(0,oy); // NULL の「書き換え」の表示と重なるときは上へ
   try{drawScore0(s,t)}finally{g.restore()}}
 function drawScore0(s,t){
   if(s.life){const a=Math.min(1,t*4);g.globalAlpha=a;ptext('LIFE −1',FW/2,MID-60,34,'#ff3355',PIX);g.globalAlpha=1;return}
-  const col=tierHex(s.tier!=null?s.tier:CS.tier),ratio=s.total/RUN.hpMax;
+  const col=tierHex(s.tier!=null?s.tier:CS.tier),ratio=s.total/RUN.hpMax,R=Math.min(ratio,1.2); // 表示の大きさは HP 比（どれだけ削ったか）で決める
   const n=s.tricks.length,per=5; // トリックの加算（1ラウンド中の動きを全部）
   s.tricks.forEach((tk,j)=>{if(t<.08+j*.07)return;const row=Math.floor(j/per),cn=Math.min(per,n-row*per),k=j%per;ptext(tk.n+' +'+tk.v.toFixed(2),FW/2+(k-(cn-1)/2)*112,MID-216+row*22,10,tk.col,PIX)});
-  if(t>.05){ptext('C '+fmtN(s.cEff)+' × T '+s.T.toFixed(2),FW/2,MID-142,25,'#ffffff',PIX); // ×系パークは C を N 倍したものとして見せる
-    let note='C '+fmtN(s.c);if(s.mm!==1)note+=' ×'+(s.mm<10?s.mm.toFixed(2):fmtN(s.mm))+'（'+s.mnote.map(m=>m.n).join('・')+'）';
-    ptext(note,FW/2,MID-110,13,'#c9a0ff',DOT);
-    ptext('T ＝ (1 + '+s.sum.toFixed(2)+') × RALLY '+s.rm.toFixed(1),FW/2,MID-88,11,'#9fd0ff',PIX)}
-  if(t>.35){const p=Math.min(1,(t-.35)*5),sz=Math.round((34+Math.min(26,Math.log10(Math.max(10,s.total))*5))*(1+Math.max(0,.35-(t-.35))*1.4));
+  const fx=v=>v>=10?fmtN(v):String(Math.round(v*100)/100),ft=v=>v>=10?String(Math.round(v)):v.toFixed(1); // 倍率・T の表記（1.6・2 ／ 1.7 のように小数1桁まで）
+  if(t>.05){const chain=s.mm!==1?fmtN(s.c)+' × '+fx(s.mm)+' × '+ft(s.T):fmtN(s.cEff)+' × '+ft(s.T); // C・T とは書かず数字だけを大きく（×系パークは別の数字として並べる）
+    let sz=(26+R*30)*(1+Math.max(0,.28-(t-.05))*.8);if(chain.length*sz*.82>540)sz=540/(chain.length*.82); // 長いときは画面に収まるまで縮める
+    g.globalAlpha=Math.min(1,(t-.05)*6);ptext(chain,FW/2,MID-124,Math.round(sz),'#ffffff',PIX);g.globalAlpha=1}
+  if(t>.35){const p=Math.min(1,(t-.35)*5),sz=Math.round((32+R*46)*(1+Math.max(0,.35-(t-.35))*1.4));
     g.globalAlpha=p;ptext('＝ '+fmtN(s.total),FW/2,MID-34,sz,ratio>=.5?(blink(8)?'#ffffff':col):col,PIX);g.globalAlpha=1;
     if(s.min)ptext('MIN',FW/2+170,MID-34,12,'#ff8888',PIX);
     if(s.kill&&t>.8)ptext('K.O.',FW/2,MID+34,40,blink(6)?'#ffffff':'#ff0055',PIX)}}
