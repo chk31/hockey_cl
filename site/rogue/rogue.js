@@ -77,6 +77,7 @@ const PASS={
   yoin:{n:'余韻',d:['ゴールのCの一部を','次のパックへ持ち越す'],ic:'M',c:'#ffccff',st:1,rare:1,k:'plus',ap:()=>{}},
   kaihou:{n:'チャクラ解放',d:['紫の先に虹','虹はダメージ ×1.3'],ic:'#',c:'#ff66ff',rare:1,k:'plus',ap:()=>{}},
   amp:{n:'増幅',d:['すべてのダメージが','倍になっていく'],ic:'%',c:'#ffee88',st:1,rare:1,k:'mult',ap:()=>{}},
+  shinshoku:{n:'侵食',d:['ブレイクしない代わりに','当てるたび微ダメージ'],ic:'W',c:'#8aff5a',st:1,rare:1,k:'mult',ap:()=>{}},
 };
 const PKEYS=Object.keys(PASS),MAXP=99; // パークの数の制限はなし（v1.65〜）
 const NKEYS=PKEYS.filter(k=>!PASS[k].rare),RKEYS=PKEYS.filter(k=>PASS[k].rare);
@@ -89,6 +90,7 @@ const FXT_P={hard:n=>'打つ速さ +'+12*n+'%',big:n=>'マレット +'+25*n+'%',
   counter:n=>'パリィのC ×'+mAt(n),shiden:n=>'紫の時 ×'+mAt(n)+'・他は×0.85',bankm:n=>'バンク +'+(.2*n).toFixed(1),postm:n=>'ポスト +'+(.3*n).toFixed(1),sokko:n=>'3往復以内 +'+(.5*n).toFixed(1),
   nagaki:n=>'ラリー上限 +'+(.5*n).toFixed(1)+'・5往復未満×0.85',togi:n=>'白以上で球 +'+(15+10*(n-1))+'%・バンパー貫通',namak:n=>'赤〜橙でゴール→次のC +'+30*n,kasane:n=>'パリィで C を足す（加算 ×'+Math.pow(1.2,n-1).toFixed(2)+'）・打撃は半分',
   renge:n=>'触るたび C +'+4*n+' ずつ重なる',kyuki:()=>'敵HP半分以上を1本で→ライフ+1',yoin:n=>'C の '+Math.round(Math.min(.75,.3+.15*(n-1))*100)+'% を次のパックへ',kaihou:()=>'紫の先に虹・虹で×1.3',amp:n=>'全ダメージ ×'+mAt(n),
+  shinshoku:n=>'ブレイクなし・敵マレットへの打撃で C×'+Math.round(shinRate(n)*100)+'% のダメージ',
   jump:n=>'出やすさ '+RG.jumpW[Math.min(n,RG.jumpW.length-1)]+'（ほかは5）・敵の方へ飛ぶ',homing:n=>'曲がる強さ ×'+n+(n>=2?'・跳ね返っても'+RG.homeT+'秒':''),slot:()=>'アイテム欄 3つ'};
 const FXT_E={hard:n=>'打つ速さ +'+12*n+'%',big:n=>'マレット +'+25*n+'%',wide:n=>'自分のゴール 左右に +'+Math.min(20*n,WSEG-RC),life:n=>'ジャンプ台 ×'+(1+.6*n).toFixed(1)};
 const RUN={shots:[],breakT:0,dur:0,durMax:300,durFlash:0,life:7,hp:100,hpMax:100,hpShow:100,hpFlash:0,sc:null,scT:0,pops:[],carry:0,nextC:0,maxDmg:0,expl:false,home:0,listMode:'run',listPg:0,sbBack:null,dOv:null,pOv:null,E:null,items:[],listBack:null,on:false,stage:0,loop:0,wins:0,pass:[],epass:[],lv:{},elv:{},fav:'jump',skills:[],ov:{},cpuOv:{},double:false,res:null,t:0,cards:[],enemy:null,
@@ -167,6 +169,7 @@ const SC={
 const TCOL=['#ff3344','#ff9a1a','#ffe014','#44e060','#3a9bff','#ffffff','#c050ff'],TNAME=['赤','橙','黄','緑','青','白','紫','虹'];
 const MULT=[1,1.3,1.6,2,3,4.5]; // ×加速型パークの Lv ごとの倍率（Lv6 以降は ×1.5 ずつ）
 const mAt=n=>n<=0?1:n<MULT.length?MULT[n]:MULT[MULT.length-1]*Math.pow(1.5,n-(MULT.length-1));
+const shinRate=n=>Math.min(.85,.25+.15*(n-1)); // 侵食：敵マレットへの打撃で C の何割を即ダメージにするか（Lv1 25%〜）
 const pl=k=>RUN.pass.includes(k)?(RUN.lv[k]||1):0; // パークの Lv（持っていなければ 0）
 const tierOf=c=>{let t=0;for(let i=1;i<SC.tier.length;i++)if(c>=SC.tier[i])t=i;if(pl('kaihou')&&c>=SC.rainbow)t=7;return t};
 const tierHex=t=>t>=7?'#ff66ff':TCOL[clamp(t,0,6)];
@@ -225,6 +228,15 @@ function calcDamage(expl){const T0=SC.tr;let c=CS.c>0?CS.c:SC.c.w;if(expl)c=Math
   d.total=Math.round(d.total);return d}
 function guardBreak(){RUN.dur=0;RUN.durFlash=1.2;RUN.breakT=RG.dura.stun;stunE(RG.dura.stun);sfx('stun',P[1].x);juice(16,.08,.9,.5,'#66ccff');
   pop('GUARD BREAK',P[1].x,P[1].y+64,'#66ccff',20,1.6,-20)}
+/* 侵食：GUARD が溜まる代わりに、敵マレットへの打撃がそのまま微ダメージになる（倒し切り可） */
+function chipHit(x,y){if(RG.infEnemy)return;const dmg=Math.max(1,Math.floor(CS.c*shinRate(pl('shinshoku'))));
+  RUN.hp=Math.max(0,RUN.hp-dmg);RUN.hpFlash=1;RUN.chip=(RUN.chip||0)+dmg;
+  pop(fmtN(dmg),x,y,'#8aff5a',14,.7,-30);
+  if(RUN.hp<=0)chipKill()}
+function chipKill(){ // 勝ち方をゴールに合流させる：スコアを勝ち点-1（ボスは HP 1）にしておいて本体の goal を呼ぶ
+  RUN.shots.push({kind:'chip',c:0,cEff:0,mm:1,mnote:[],T:0,sum:0,rm:1,rally:0,tricks:[],perks:['shinshoku'],dmg:RUN.chip||0,kill:true,min:false,tier:0});
+  if(BOSS.on)BOSS.hp=1;else{P[0].score=RULE.win-1;addFx('nulldie',P[1].x,P[1].y,1,'','#3dff7a')}
+  _goal(0)}
 function postGoal(d,expl){const r=d.total/RUN.hpMax,col=tierHex(CS.tier);RUN.hpFlash=1;
   if(r>=.5||d.kill){juice(26,.14,1.6,.9,'#ffffff');addFx('wave',FW/2,FY0,320,'','#ffffff')}else if(r>=.2)juice(14,.07,.9,.45,col);
   if(r>=.2)sfx('smash',1500,FW/2);if(r>=.5)sfx('boom',FW/2);
@@ -239,7 +251,7 @@ function hpMaxFor(){const k=STAGES[RUN.stage].k;if(k==='boss')return SC.hp.nullH
   return Math.round(H.zako*(k==='elite'?H.elite:1)*gr*(1+SC.hpStep*(RUN.E?RUN.E.hpUp||0:0)))}
 
 /* ---- 試合を始める ---- */
-function startMatch(){RUN.double=false;RUN.tele=[];RUN.sc=null;RUN.shots=[];RUN.breakT=0;RUN.pops=[];RUN.expl=false;if(!(RUN.life>0))RUN.life=SC.life.max;RUN.sk={jump:RG.jumpT*.6,charge:RG.chargeT*.6,block:1.5};
+function startMatch(){RUN.double=false;RUN.tele=[];RUN.sc=null;RUN.shots=[];RUN.breakT=0;RUN.pops=[];RUN.expl=false;RUN.chip=0;if(!(RUN.life>0))RUN.life=SC.life.max;RUN.sk={jump:RG.jumpT*.6,charge:RG.chargeT*.6,block:1.5};
   const st=STAGES[RUN.stage];
   if(st.k==='boss'){BOSS.on=false;bossStart();Object.assign(LV[3],RUN.cpuOv)}
   else{bossOff();LV[4]=stageLv();start('cpu',4)}
@@ -265,7 +277,7 @@ function makeCards(boss){RUN.favPick=pick(favItems());const np=shuffle(NKEYS.fil
   // 報酬の1枚は必ず「＋C」か「×倍率」のパークから出す（インフレについていくため）
   const sc=k=>PASS[k].k==='plus'||PASS[k].k==='mult';
   if(!RUN.cards.some(c=>sc(c.k))){const pool=shuffle(NKEYS.filter(k=>canTake(k)&&sc(k)&&!RUN.cards.some(c=>c.k===k)));if(pool.length){const at=RUN.cards.map(c=>c.rare?0:1).lastIndexOf(1);RUN.cards[at<0?RUN.cards.length-1:at]={k:pool[0]}}}}
-function givePerk(key){if(RUN.pass.includes(key))RUN.lv[key]=(RUN.lv[key]||1)+1;else{RUN.pass.push(key);RUN.lv[key]=1}if(key==='fav')RUN.fav=RUN.favPick}
+function givePerk(key){if(RUN.pass.includes(key))RUN.lv[key]=(RUN.lv[key]||1)+1;else{RUN.pass.push(key);RUN.lv[key]=1}if(key==='fav')RUN.fav=RUN.favPick;if(key==='shinshoku')RUN.dur=0}
 const CARD=k=>RUN.bossPick?{x:60+k*250,y:MID-190,w:230,h:330}:{x:24+k*192,y:MID-190,w:168,h:330};
 function takeCard(k){const c=RUN.cards[k];if(!c)return;
   if(c.pair)c.pair.forEach(givePerk);else givePerk(c.k);
@@ -304,8 +316,10 @@ hit=function(x,y,sp,txt,who=-1,wn=null){
       if(sp>=300&&CS.c>0&&CS.tr.bank<2){CS.tr.bank++;CS.tr.long=0;addFx('wave',x,y,46,'','#00ffff')}} // バンク：自分の打撃のあとに壁へ当たった
     else if(who===0){if(sp>=80){const k=mKind(sp);if(k==='smash'&&clock-CR.smashT>=SC.ccd.smash){CR.smash++;CR.smashT=clock}setC(k)}}
     else if(who===1){CS.tr.long=0;CS.streak=0;
-      if(CS.c>0&&sp>=100&&P[1].stun<=0){RUN.dur+=CS.c; // 敵のマレットが受けた C を積み上げる。耐久力を超えるとスタン
-        if(RUN.dur>=RUN.durMax)guardBreak()}}}
+      if(CS.c>0&&sp>=100&&P[1].stun<=0){
+        if(pl('shinshoku'))chipHit(x,y); // 侵食：耐久は溜まらず、その場で微ダメージ
+        else{RUN.dur+=CS.c; // 敵のマレットが受けた C を積み上げる。耐久力を超えるとスタン
+          if(RUN.dur>=RUN.durMax)guardBreak()}}}}
   return _hit(x,y,sp,txt,who,wn)};
 const _postHit=postHit;
 postHit=function(x,y,v){if(RUN.on&&state==='play'&&v>=100&&CS.c>0&&!CS.tr.post){CS.tr.post=1;CS.tr.long=0;addFx('wave',x,y,50,'','#ffffff')}return _postHit(x,y,v)};
@@ -475,7 +489,7 @@ function drawScore0(s,t){
     if(s.min)ptext('MIN',FW/2+170,MID-34,12,'#ff8888',PIX);
     if(s.kill&&t>.8)ptext('K.O.',FW/2,MID+34,40,blink(6)?'#ffffff':'#ff0055',PIX)}}
 /* バトルの結果：どのショットで何点与えたか（C・T・計算で発動したパーク） */
-const SHOTN={w:'弱打',m:'打撃',s:'強打',f:'速打',smash:'SMASH',parry:'PARRY',sup:'SUPER',boost:'加速床',jump:'ジャンプ台',bump:'バンパー',expl:'4秒爆発'};
+const SHOTN={w:'弱打',m:'打撃',s:'強打',f:'速打',smash:'SMASH',parry:'PARRY',sup:'SUPER',boost:'加速床',jump:'ジャンプ台',bump:'バンパー',expl:'4秒爆発',chip:'侵食'};
 function drawResult(w){const all=RUN.shots,tot=all.reduce((a,x)=>a+x.dmg,0),MAXR=8,RH=80;
   const rows=all.length>MAXR?all.slice().sort((a,b)=>b.dmg-a.dmg).slice(0,MAXR):all;
   ptext(w?(BOSS.on?'NULL DEFEATED!':'STAGE CLEAR!'):'GAME OVER',FW/2,FY0+52,w?30:36,w?YEL:'#ff0055');
