@@ -75,7 +75,7 @@ const PASS={
   renge:{n:'連撃',d:['触るたびに','Cが重なっていく'],ic:'E',c:'#ff7788',st:1,k:'plus',ap:()=>{}},
   kyuki:{n:'吸気',d:['敵HPの半分以上を','1本で削るとライフ+1'],ic:'Y',c:'#ff88aa',k:'act',ap:()=>{}},
   yoin:{n:'余韻',d:['ゴールのCの一部を','次のパックへ持ち越す'],ic:'M',c:'#ffccff',st:1,rare:1,k:'plus',ap:()=>{}},
-  kaihou:{n:'チャクラ解放',d:['紫の先に虹','虹はダメージ ×1.3'],ic:'#',c:'#ff66ff',rare:1,k:'plus',ap:()=>{}},
+  kaihou:{n:'チャクラ解放',d:['C が下がらない','紫の先に虹（×1.3）'],ic:'#',c:'#ff66ff',rare:1,k:'plus',ap:()=>{}},
   amp:{n:'増幅',d:['すべてのダメージが','倍になっていく'],ic:'%',c:'#ffee88',st:1,rare:1,k:'mult',ap:()=>{}},
   shinshoku:{n:'侵食',d:['ブレイクしない代わりに','当てるたび微ダメージ'],ic:'W',c:'#8aff5a',st:1,rare:1,k:'mult',ap:()=>{}},
 };
@@ -89,7 +89,7 @@ const FXT_P={hard:n=>'打つ速さ +'+12*n+'%',big:n=>'マレット +'+25*n+'%',
   smashp:n=>'スマッシュのC +'+15*n,jumpm:n=>'ジャンプ台のC +'+12*n+'・空中 +'+(.1*n).toFixed(1),gyaku:n=>'ライフ3以下で C +'+10*n,chiku:n=>'自陣で持つ間 1秒ごと C +'+8*n,
   counter:n=>'パリィのC ×'+mAt(n),shiden:n=>'紫の時 ×'+mAt(n)+'・他は×0.85',bankm:n=>'バンク +'+(.2*n).toFixed(1),postm:n=>'ポスト +'+(.3*n).toFixed(1),sokko:n=>'3往復以内 +'+(.5*n).toFixed(1),
   nagaki:n=>'ラリー上限 +'+(.5*n).toFixed(1)+'・5往復未満×0.85',togi:n=>'白以上で球 +'+(15+10*(n-1))+'%・バンパー貫通',namak:n=>'赤〜橙でゴール→次のC +'+30*n,kasane:n=>'パリィで C を足す（加算 ×'+Math.pow(1.2,n-1).toFixed(2)+'）・打撃は半分',
-  renge:n=>'触るたび C +'+4*n+' ずつ重なる',kyuki:()=>'敵HP半分以上を1本で→ライフ+1',yoin:n=>'C の '+Math.round(Math.min(.75,.3+.15*(n-1))*100)+'% を次のパックへ',kaihou:()=>'紫の先に虹・虹で×1.3',amp:n=>'全ダメージ ×'+mAt(n),
+  renge:n=>'触るたび C +'+4*n+' ずつ重なる',kyuki:()=>'敵HP半分以上を1本で→ライフ+1',yoin:n=>'C の '+Math.round(Math.min(.75,.3+.15*(n-1))*100)+'% を次のパックへ',kaihou:()=>'そのラリー中 C が下がらない・虹で×1.3',amp:n=>'全ダメージ ×'+mAt(n),
   shinshoku:n=>'ブレイクなし・敵マレットへの打撃で C×'+Math.round(shinRate(n)*100)+'% のダメージ',
   jump:n=>'出やすさ '+RG.jumpW[Math.min(n,RG.jumpW.length-1)]+'（ほかは5）・敵の方へ飛ぶ',homing:n=>'曲がる強さ ×'+n+(n>=2?'・跳ね返っても'+RG.homeT+'秒':''),slot:()=>'アイテム欄 3つ'};
 const FXT_E={hard:n=>'打つ速さ +'+12*n+'%',big:n=>'マレット +'+25*n+'%',wide:n=>'自分のゴール 左右に +'+Math.min(20*n,WSEG-RC),life:n=>'ジャンプ台 ×'+(1+.6*n).toFixed(1)};
@@ -181,7 +181,11 @@ const UNITS=['','K','M','B','T','aa','ab','ac','ad','ae','af','ag','ah','ai','aj
 function fmtN(n){n=Math.max(0,+n||0);if(n<1000)return String(Math.round(n));let u=0;while(n>=999.5&&u<UNITS.length-1){n/=1000;u++}return (n>=100?n.toFixed(0):n>=10?n.toFixed(1):n.toFixed(2))+UNITS[u]}
 function resetCS(){for(const k in CR)CR[k]=0;RUN.breakT=0;CS.pk=new Set();CS.kind='w';CS.c=RUN.carry>0?RUN.carry:0;CS.pend=RUN.carry>0?RUN.carry:0;RUN.carry=0;CS.tier=CS.c>0?tierOf(CS.c):0;CS.tr={bank:0,post:0,air:0,long:0};CS.streak=0;CS.hold=0}
 function pop(txt,x,y,col,size,life=1.1,vy=-40){RUN.pops.push({txt,x,y,col,size,life,t:0,vy})}
-function applyC(c,kind,used){const old=CS.tier;CS.c=c;CS.tier=tierOf(c);CS.kind=kind;CS.pk=new Set(used||[]);
+function applyC(c,kind,used){const old=CS.tier;
+  if(pl('kaihou')&&c<CS.c){ // チャクラ解放：C はそのラリー中の最大値を保つ（弱い打撃で上書きしても下がらない。印・種別も今の C のまま）
+    if(isMallet(kind)&&CS.tier>=5&&pl('togi')){const k=1.15+.1*(pl('togi')-1);puck.vx*=k;puck.vy*=k} // 研ぎ澄まし：今の C が白以上なら球は速くなる
+    return}
+  CS.c=c;CS.tier=tierOf(c);CS.kind=kind;CS.pk=new Set(used||[]);
   CS.tr={bank:0,post:0,air:0,long:(isMallet(kind)&&puck.y>MID+60)?1:0}; // C を上書きしたら印は付け直し
   const col=tierHex(CS.tier);addFx('wave',puck.x,puck.y,52,'',col); // 上書きのたびに小さな輪（数字は段階が上がったときだけ）
   if(CS.tier>old){pop('C '+fmtN(c),puck.x,puck.y-52,col,CS.tier>=6?30:22,1.0);beep(500+CS.tier*140,.05,'square',.05)}
