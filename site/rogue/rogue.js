@@ -33,7 +33,7 @@ const QUIRK={speed:{n:'スピード型',f:L=>{L.sp*=1.2;L.err*=1.3}},prec:{n:'�
   power:{n:'強打型',f:L=>{L.pw+=.2;L.tr=Math.max(0,L.tr-.1)}},guard:{n:'守備型',f:L=>{L.tr=Math.min(1,L.tr+.15);L.re*=.9;L.pw=Math.max(.8,L.pw-.1)}}};
 const SKILL_PREF={jumper:['hard','life'],blocker:['big'],charger:['hard']},SKILL_QUIRK={jumper:'speed',blocker:'guard',charger:'power'};
 const SKILLS={
-  jumper:{n:'JUMPER',d:'ジャンプ台を自分の陣地に置く',c:IT.jump.c},
+  jumper:{n:'JUMPER',d:'ジャンプ台を自分の陣地に置く',c:'#ff3366'}, // JUMPER のジャンプ台は色違い（向きなし＝本体と同じ性能）
   blocker:{n:'BLOCKER',d:'ゴールの前にかたいバンパー',c:IT.bumper.c},
   charger:{n:'CHARGER',d:'ときどきスーパーシュート',c:AURA},
 };
@@ -196,9 +196,14 @@ function skills(dt){if(!live||PAR.who>=0||SUP.aim>=0)return;const S=RUN.skills;
 }
 function skillFire(k){const T=RG.tele;beep(1760,.05,'square',.05);beep(1760,.05,'square',.05,.12);
   if(k==='jumper'){let x=0,y=0;for(let n=0;n<10;n++){x=rnd(110,FW-110);y=rnd(FY0+250,MID-130);if(!placed.some(q=>Math.hypot(q.x-x,q.y-y)<120))break}
-    RUN.tele.push({k,x,y,t:T,go:()=>{placed.push({id:++pid,type:'jump',aim:true,x,y,o:1,age:0,life:9.6*(P[1].lifeK||1),hit:0,mesh:null});sfx('place',x);addFx('wave',x,y,IT.jump.r+60,'',IT.jump.c)}})}
+    RUN.tele.push({k,x,y,t:T,go:()=>{const it={id:++pid,type:'jump',x,y,o:1,age:0,life:9.6*(P[1].lifeK||1),hit:0,mesh:null,rgJ:true};placed.push(it);enemyJumpMesh(it);sfx('place',x);addFx('wave',x,y,IT.jump.r+60,'',SKILLS.jumper.c)}})}
   else if(k==='blocker'){const x=FW/2,y=FY0+200;RUN.tele.push({k,x,y,t:T,go:()=>{placed.push({id:++pid,type:'bumper',x,y,o:1,age:0,life:1e9,hit:0,mesh:null,mega:true,hp:RG.blockHP+UP(),rgBlock:true});sfx('place',x);addFx('wave',x,y,IT.bumper.r+60,'',IT.bumper.c)}})}
   else if(k==='charger'){RUN.tele.push({k,x:0,y:0,t:T,go:()=>{RUN.sk.charge=RG.chargeT*Math.pow(.8,UP());const b=P[1];if(b.pw)return;b.pw=true;addFx('wave',b.x,b.y,110,'',AURA);sfx('pwr')}})}}
+
+/* JUMPER のジャンプ台の 3D：先に作って色を変える（台も上の絵も SKILLS.jumper.c に） */
+function enemyJumpMesh(it){if(!has3D||!meshes.make)return;const m=meshes.make.jump();m.position.set(wx(it.x),0,wz(it.y));m.rotation.y=Math.PI;
+  for(const c of m.children)if(c.material&&c.material.color)c.material.color.set(SKILLS.jumper.c); // 台と上の絵（絵は色を掛ける）
+  scene.add(m);it.mesh=m}
 
 /* ---- 入力 ---- */
 const _pdown=pdown;
@@ -244,7 +249,7 @@ function overlay(){
       {const v=powOf(curP());ptext('PWR '+v,BOSS.on?120:430,BOSS.on?FY1+98:FY1+78,10,powCol(v))}});
     // 強敵の技の前兆・耐久
     for(const t of RUN.tele){const a=1-t.t/RG.tele;if(t.k==='charger'){const b=P[1];for(let j=0;j<14;j++){const an=j/14*6.2832+clock*6;sq(b.x+Math.cos(an)*(mrOf(1)+16),b.y+Math.sin(an)*(mrOf(1)+16),8,blink(10)?'#fff':AURA)}}
-      else{const c=t.k==='jumper'?IT.jump.c:IT.bumper.c,R=60-a*20;for(let j=0;j<16;j++){const an=j/16*6.2832;if(blink(8))sq(t.x+Math.cos(an)*R,t.y+Math.sin(an)*R,8,c)}}
+      else{const c=t.k==='jumper'?SKILLS.jumper.c:IT.bumper.c,R=60-a*20;for(let j=0;j<16;j++){const an=j/16*6.2832;if(blink(8))sq(t.x+Math.cos(an)*R,t.y+Math.sin(an)*R,8,c)}}
       if(blink(6))ptext('!',t.k==='charger'?P[1].x:t.x,(t.k==='charger'?P[1].y:t.y)-70,20,YEL)}
     for(const it of placed)if(it.aim&&!it.dead){const a=boostDir(it.o,it.x,it.y),c=it.o?COL[1]:COL[0];for(let j=0;j<3;j++){const t=((clock*2+j/3)%1),x=it.x+a.dx*(20+t*44),y=it.y+a.dy*(20+t*44);sq(x,y,8,'#000');sq(x,y,5,c)}} // ジャンプ台の向き（流れる点）
     if(!BOSS.on)for(const it of placed)if(it.rgBlock&&!it.dead)for(let j=0;j<it.hp;j++){sq(it.x-12+j*12,it.y-50,10,'#000');sq(it.x-12+j*12,it.y-50,6,'#cc88ff')}

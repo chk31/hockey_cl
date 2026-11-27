@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.65">
+<meta name="version" content="1.66">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.65'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.66'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 /* 新しい版の確認：起動時とアプリに戻ったときに、キャッシュを使わずに公開中のページの版を読み、新しければタイトル画面で読み込み直す（別のURLにして古いキャッシュを避ける） */
 function verCheck(){try{fetch(location.pathname+'?vc='+Date.now(),{cache:'no-store'}).then(r=>r.text()).then(t=>{const m=t.match(/<meta name="version" content="([0-9.]+)">/);
   if(!m||+m[1]<=+VER)return;const go=()=>{const q=new URLSearchParams(location.search);if(q.get('v')===m[1])return;q.set('v',m[1]);location.replace(location.pathname+'?'+q)};
