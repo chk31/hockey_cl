@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="AIR HOCKEY">
 <meta name="theme-color" content="#000000">
 <title>アイテムエアホッケー</title>
-<meta name="version" content="1.62">
+<meta name="version" content="1.63">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 /* VOICE: 80年代ゲームセンターの筐体。ピコピコ、チカチカ
@@ -38,7 +38,7 @@ canvas{position:fixed;left:0;top:0;width:100%;height:100%;display:block} /* 実�
 <script>
 {
 const ui=document.getElementById('ui'),g=ui.getContext('2d'),glc=document.getElementById('gl');
-const VER='1.62'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
+const VER='1.63'; // バージョン（更新のたびに上げる。タイトル画面の右下に表示）
 /* 新しい版の確認：起動時とアプリに戻ったときに、キャッシュを使わずに公開中のページの版を読み、新しければタイトル画面で読み込み直す（別のURLにして古いキャッシュを避ける） */
 function verCheck(){try{fetch(location.pathname+'?vc='+Date.now(),{cache:'no-store'}).then(r=>r.text()).then(t=>{const m=t.match(/<meta name="version" content="([0-9.]+)">/);
   if(!m||+m[1]<=+VER)return;const go=()=>{const q=new URLSearchParams(location.search);if(q.get('v')===m[1])return;q.set('v',m[1]);location.replace(location.pathname+'?'+q)};
@@ -46,7 +46,7 @@ function verCheck(){try{fetch(location.pathname+'?vc='+Date.now(),{cache:'no-sto
 setTimeout(verCheck,1500);document.addEventListener('visibilitychange',()=>{if(!document.hidden)verCheck()});
 const FW=600,TRAY=110,GUT=48,FL=1000,TL=FL+2*TRAY+2*GUT,FY0=GUT+TRAY,FY1=FY0+FL,MID=FY0+FL/2,GW=220,PR=26,MR=40,MAXV=1680,WIN=7; // MAXV＝パックの最高速（v1.37 で旧ゲームスピード0.8倍を基準＝100%に。パックの速さの値はすべて旧値の0.8倍）
 /* 差し込み口（ローグライク版 rogue/rogue.js が書き換える。本体だけなら初期値のまま＝今と同じ動き）
-   RULE.win＝勝ちの点数。プレイヤーごと：P[i].mr＝マレットの半径、P[i].hm＝打ったパックの速さの倍率、P[i].boxK＝箱の出る間隔の倍率、P[i].lifeK＝置いた物の持続の倍率、P[i].parK＝パリィ受付の倍率、P[i].iw＝アイテムの出やすさ。WB.t＝上のゴールを左右に広げる幅 */
+   RULE.win＝勝ちの点数。プレイヤーごと：P[i].mr＝マレットの半径、P[i].hm＝打ったパックの速さの倍率、P[i].boxK＝箱の出る間隔の倍率、P[i].lifeK＝置いた物の持続の倍率、P[i].parK＝パリィ受付の倍率、P[i].iw＝アイテムの出やすさ。WB.t＝上のゴールを左右に広げる幅。P[1].parFrz＝パリィの停止中に CPU を完全に止める */
 const RULE={win:WIN};const mrOf=i=>P[i]&&P[i].mr||MR;
 const COL=['#ff0055','#00aaff'],DEEP=['#aa0000','#0055aa'],INK='#000',YEL='#ffff00',PX=3;
 const PIX='"Press Start 2P",monospace',DOT='"DotGothic16",monospace';
@@ -1354,7 +1354,7 @@ function update(dt){
   const ms=P.map(p=>{
     const stopNow=SUP.aim>=0||PAR.who>=0&&state==='play'; // スーパーシュートの構え・パリィの停止中
     if(stopNow&&(p.i===SUP.aim||p.i===PAR.who)){p.vx=p.vy=0;return {i:p.i,ox:p.x,oy:p.y,nx:p.x,ny:p.y,vx:0,vy:0,x:p.x,y:p.y}} // 狙っている人は動かない（狙いは指の位置で決まる）
-    if(BOSS.on&&p.i===1&&(BOSS.delay>0||PAR.who===0)){ // ボス戦：プレイヤーのパリィの時間停止中は完全に止まり、停止後も0.5秒動けない
+    if((BOSS.on||p.parFrz)&&p.i===1&&((BOSS.on&&BOSS.delay>0)||PAR.who===0)){ // p.parFrz＝差し込み口（ローグ版：ボス以外の CPU もパリィの停止中は止める） // ボス戦：プレイヤーのパリィの時間停止中は完全に止まり、停止後も0.5秒動けない
       p.vx=p.vy=0;return {i:p.i,ox:p.x,oy:p.y,nx:p.x,ny:p.y,vx:0,vy:0,x:p.x,y:p.y}} // パリィされた直後、ボスは少し遅れて動き出す
     if(p.stun>0){if(!stopNow)p.stun=Math.max(0,p.stun-dt);p.vx=p.vy=0;return {i:p.i,ox:p.x,oy:p.y,nx:p.x,ny:p.y,vx:0,vy:0,x:p.x,y:p.y}} // スタン中は動けない
     const ox=p.x,oy=p.y,MR=mrOf(p.i);let dx=p.tx-ox,dy=p.ty-oy;const inM=placed.some(it=>it.type==='mud'&&Math.hypot(ox-it.x,oy-it.y)<IT.mud.r);const d=Math.hypot(dx,dy),mx=(p.maxV||3400)*(p.boost||1)*(inM?.4:1)*(stopNow?STOP_MV:1)*dt; // 人の指に追従するマレットは実時間、CPUは世界の速度に合わせる
