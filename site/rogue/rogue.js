@@ -61,7 +61,7 @@ const PASS={
   // ---- チャクラ（得点）系：効果は得点計算の中で参照する（k＝plus：＋C／mult：×倍率／trick：トリック／act：発動。報酬の1枚は plus か mult から出す）----
   smashp:{n:'スマッシュ職人',d:['スマッシュの','Cが上がる'],ic:'S',c:'#ff3366',st:1,k:'plus',ap:()=>{}},
   sokoage:{n:'底上げ',d:['すべての当たりの','Cが上がる'],ic:'底',c:'#ffcc99',st:1,k:'plus',ap:()=>{}},
-  jumpm:{n:'跳躍の極意',d:['ジャンプ台のCと','空中ゴールが強い'],ic:'U',c:'#ffaa00',st:1,k:'plus',ap:()=>{}},
+  jumpm:{n:'置物職人',d:['自分の置物全部の','Cが上がる'],ic:'U',c:'#ffaa00',st:1,k:'mult',ap:()=>{}},
   gyaku:{n:'逆境の気',d:['ライフ3以下の','とき C が上がる'],ic:'X',c:'#ff6644',st:1,k:'plus',ap:()=>{}},
   chiku:{n:'蓄気',d:['自陣で持つ間','Cがたまる'],ic:'C',c:'#55ddaa',st:1,k:'plus',ap:()=>{}},
   counter:{n:'反撃の型',d:['パリィのCが','大きく伸びる'],ic:'R',c:'#3399ff',st:1,k:'mult',ap:()=>{}},
@@ -89,7 +89,7 @@ const favItems=()=>KEYS.filter(q=>q!=='super'&&(q!=='jump'||RUN.pass.includes('j
 const FXT_P={hard:n=>'打つ速さ +'+12*n+'%',big:n=>'マレット +'+25*n+'%',wide:n=>'相手のゴール 左右に +'+Math.min(20*n,WSEG-RC),box:n=>'箱の間隔 ×'+Math.pow(.65,n).toFixed(2),
   life:n=>'置いた物 ×'+(1+.6*n).toFixed(1),fav:()=>IT[RUN.fav].n+' が3倍出やすい',gosen:()=>'パリィ成功で箱がすぐ出る',giri:()=>'受付半分・成功で次のダメージ ×2',
   zan:n=>'パリィ後の敵スタン +'+(.2*n).toFixed(1)+'秒',tsuki:n=>'パリィ球に当たった敵 '+(.3*n).toFixed(1)+'秒スタン',
-  smashp:n=>'スマッシュのC ×'+mAt(n),sokoage:n=>'すべての当たりのC +'+6*n,jumpm:n=>'ジャンプ台のC +'+12*n+'・空中 +'+(.1*n).toFixed(1),gyaku:n=>'ライフ3以下で C +'+10*n,chiku:n=>'自陣で持つ間 1秒ごと C +'+8*n,
+  smashp:n=>'スマッシュのC ×'+mAt(n),sokoage:n=>'すべての当たりのC +'+6*n,jumpm:n=>'自分の置物（加速床・ジャンプ台・バンパー）のC ×'+mAt(n)+'・空中 +'+(.1*n).toFixed(1),gyaku:n=>'ライフ3以下で C +'+10*n,chiku:n=>'自陣で持つ間 1秒ごと C +'+8*n,
   counter:n=>'パリィのC ×'+mAt(n),shiden:n=>'紫の時 ×'+mAt(n),bankm:n=>'バンク +'+(.2*n).toFixed(1),postm:n=>'ポスト +'+(.3*n).toFixed(1),sokko:n=>'3往復以内 +'+(.5*n).toFixed(1),
   nagaki:n=>'ラリー上限 +'+(.5*n).toFixed(1)+'・5往復未満×0.85',togi:n=>'白以上で球 +'+(15+10*(n-1))+'%・バンパー貫通',namak:n=>'赤〜橙でゴール→次のC +'+30*n,kasane:n=>'パリィで C を足す（加算 ×'+Math.pow(1.2,n-1).toFixed(2)+'）・打撃は半分',
   renge:n=>'触るたび C +'+4*n+' ずつ重なる',kyuki:()=>'敵HP半分以上を1本で→ライフ+1',yoin:n=>'C の '+Math.round(Math.min(.75,.3+.15*(n-1))*100)+'% を次のパックへ',kaihou:()=>'そのラリー中 C が下がらない・虹で×1.3',amp:n=>'全ダメージ ×'+mAt(n),
@@ -200,9 +200,9 @@ function setC(kind){const C=SC.c;let c=0;const used=[];
   else if(isMallet(kind)){c=C[kind];if(pl('kasane')){c*=.5;used.push('kasane')}}
   else if(kind==='parry'){c=C.parry*mAt(pl('counter'));if(pl('counter'))used.push('counter')}
   else if(kind==='sup')c=C.sup;
-  else if(kind==='boost')c=C.boost;
-  else if(kind==='jump'){c=C.jump+12*pl('jumpm');if(pl('jumpm'))used.push('jumpm')}
-  else if(kind==='bump')c=C.bump;
+  else if(kind==='boost'){c=C.boost*mAt(pl('jumpm'));if(pl('jumpm'))used.push('jumpm')}
+  else if(kind==='jump'){c=C.jump*mAt(pl('jumpm'));if(pl('jumpm'))used.push('jumpm')}
+  else if(kind==='bump'){c=C.bump*mAt(pl('jumpm'));if(pl('jumpm'))used.push('jumpm')}
   if(kind==='parry'&&pl('kasane')){c=CS.c+c*Math.pow(1.2,pl('kasane')-1);used.push('kasane')} // 気の重ね：パリィは C を置きかえず足す
   if(pl('gyaku')&&RUN.life<=3){c+=10*pl('gyaku');used.push('gyaku')}
   if(isMallet(kind)&&pl('renge')){CS.streak++;c+=4*pl('renge')*CS.streak;used.push('renge')}
